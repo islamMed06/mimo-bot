@@ -27,11 +27,19 @@ class LLMManager:
         self.historique = []
 
     def get_system_prompt(self, user_message=None):
+        from datetime import datetime
+        aujourdhui = datetime.now().strftime("%A %d %B %Y")
+        jours_semaine_fr = {"Monday": "lundi", "Tuesday": "mardi", "Wednesday": "mercredi", "Thursday": "jeudi", "Friday": "vendredi", "Saturday": "samedi", "Sunday": "dimanche"}
+        mois_fr = {"January": "janvier", "February": "février", "March": "mars", "April": "avril", "May": "mai", "June": "juin", "July": "juillet", "August": "août", "September": "septembre", "October": "octobre", "November": "novembre", "December": "décembre"}
+        jour, mois, reste = aujourdhui.split(" ", 2)
+        aujourdhui_fr = f"{jours_semaine_fr.get(jour, jour)} {mois_fr.get(mois, mois)} {reste}"
+        heure = datetime.now().strftime("%H:%M")
         langue = "fr"
         if user_message:
             langue = detecter_langue(user_message)
         base_fr = (
             f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
+            f"Nous sommes le {aujourdhui_fr} et il est {heure}. "
             f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
             f"Tu utilises Groq (llama-3.3-70b) comme LLM principal et Gemini (gemini-2.0-flash) en fallback. "
             f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
@@ -41,6 +49,7 @@ class LLMManager:
         )
         base_en = (
             f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
+            f"Today is {aujourdhui} and the time is {heure}. "
             f"Always reply in the user's language. Be concise, clear, and helpful. "
             f"You use Groq (llama-3.3-70b) as your main LLM and Gemini (gemini-2.0-flash) as fallback. "
             f"You have tools for calendar management, emails, student grades, lesson plans, "
