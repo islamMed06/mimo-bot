@@ -1,11 +1,17 @@
 import os
 import json
 import logging
+from datetime import datetime, timezone, timedelta
 from groq import Groq
 import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+
+ALGERIA_TZ = timezone(timedelta(hours=1))
+
+def maintenant_algerie():
+    return datetime.now(ALGERIA_TZ)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("LLM")
@@ -27,13 +33,13 @@ class LLMManager:
         self.historique = []
 
     def get_system_prompt(self, user_message=None):
-        from datetime import datetime
-        aujourdhui = datetime.now().strftime("%A %d %B %Y")
+        maintenant = maintenant_algerie()
+        aujourdhui = maintenant.strftime("%A %d %B %Y")
         jours_semaine_fr = {"Monday": "lundi", "Tuesday": "mardi", "Wednesday": "mercredi", "Thursday": "jeudi", "Friday": "vendredi", "Saturday": "samedi", "Sunday": "dimanche"}
         mois_fr = {"January": "janvier", "February": "février", "March": "mars", "April": "avril", "May": "mai", "June": "juin", "July": "juillet", "August": "août", "September": "septembre", "October": "octobre", "November": "novembre", "December": "décembre"}
         jour, mois, reste = aujourdhui.split(" ", 2)
         aujourdhui_fr = f"{jours_semaine_fr.get(jour, jour)} {mois_fr.get(mois, mois)} {reste}"
-        heure = datetime.now().strftime("%H:%M")
+        heure = maintenant.strftime("%H:%M")
         langue = "fr"
         if user_message:
             langue = detecter_langue(user_message)
