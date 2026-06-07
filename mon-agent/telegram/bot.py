@@ -2,6 +2,8 @@ import os
 import sys
 import asyncio
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -116,7 +118,24 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.error(f"Erreur traitement message: {e}")
         await update.message.reply_text("Desole, une erreur s'est produite.")
 
+class SanteHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"MimoBot OK")
+
+    def log_message(self, format, *args):
+        pass
+
+def run_http():
+    port = int(os.environ.get("PORT", 10000))
+    serveur = HTTPServer(("0.0.0.0", port), SanteHandler)
+    log.info(f"HTTP prêt sur le port {port}")
+    serveur.serve_forever()
+
 def main():
+    t = threading.Thread(target=run_http, daemon=True)
+    t.start()
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         log.error("TELEGRAM_TOKEN manquant dans .env")
