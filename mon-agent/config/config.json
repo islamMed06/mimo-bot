@@ -1,0 +1,53 @@
+{
+  "agent": {
+    "nom": "MimoBot",
+    "langue": "fr",
+    "langues_supportees": ["fr", "en"],
+    "mode_autonomie": "limite",
+    "version": "1.0.0"
+  },
+  "llm": {
+    "principal": "groq",
+    "fallback": "gemini",
+    "modele_groq": "llama-3.3-70b-versatile",
+    "modele_gemini": "gemini-2.0-flash",
+    "max_tokens": 2048,
+    "temperature": 0.7
+  },
+  "tools": {
+    "built_in": {
+      "calendrier": true,
+      "email": true,
+      "correction": true,
+      "notes": true,
+      "fiches": true,
+      "stats": true,
+      "site_web": true
+    },
+    "mcp": {
+      "brave_search": false,
+      "github": false,
+      "notion": false
+    }
+  },
+  "skills": {
+    "built_in": {
+      "memoire": true,
+      "recherche_web": true,
+      "auto_install": true
+    },
+    "external": {}
+  },
+  "memoire": {
+    "court_terme_max_messages": 20,
+    "moyen_terme_jours": 30,
+    "long_terme_actif": true,
+    "auto_resume": true,
+    "apprentissage_actif": true
+  },
+  "autonomie": {
+    "actions_libres": ["lire", "chercher", "analyser", "generer"],
+    "actions_confirmation": ["creer", "modifier", "envoyer", "uploader", "activer", "installer"],
+    "actions_interdites": ["supprimer_masse", "partager_donnees"]
+  }
+}
