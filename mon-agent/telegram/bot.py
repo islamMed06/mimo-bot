@@ -41,6 +41,25 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     llm = LLM_INDICATEURS.get(a.llm.llm_actif, a.llm.llm_actif)
     await update.message.reply_text(f"**{a.config['agent']['nom']}**\nVersion: {a.config['agent']['version']}\nLLM: {llm}\nMemoire: {len(a.memory.court_terme)} messages\nOutils: {len(a.outils)}")
 
+async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    import os
+    a = get_agent()
+    groq_key = "✅" if os.getenv("GROQ_API_KEY") else "❌"
+    gemini_key = "✅" if os.getenv("GEMINI_API_KEY") else "❌"
+    firebase_key = "✅" if os.getenv("FIREBASE_PRIVATE_KEY") else "❌"
+    lignes = [
+        "**Diagnostic MimoBot**",
+        f"GROQ_API_KEY: {groq_key}",
+        f"GEMINI_API_KEY: {gemini_key}",
+        f"FIREBASE_PRIVATE_KEY: {firebase_key}",
+        f"Derniere erreur Groq: {a.llm.derniere_erreur_groq or 'aucune'}",
+        f"Derniere erreur Gemini: {a.llm.derniere_erreur_gemini or 'aucune'}",
+        f"LLM actif: {a.llm.llm_actif}",
+        f"Historique LLM: {len(a.llm.historique)} messages",
+        f"Memoire court terme: {len(a.memory.court_terme)} messages",
+    ]
+    await update.message.reply_text("\n".join(lignes))
+
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
     profil = a.memory.charger_profil(str(update.effective_user.id))
@@ -107,6 +126,9 @@ def lancer_bot():
     if not token:
         log.error("TELEGRAM_TOKEN manquant")
         return
+    log.info(f"GROQ_API_KEY present: {bool(os.getenv('GROQ_API_KEY'))}")
+    log.info(f"GEMINI_API_KEY present: {bool(os.getenv('GEMINI_API_KEY'))}")
+    log.info(f"FIREBASE_PRIVATE_KEY present: {bool(os.getenv('FIREBASE_PRIVATE_KEY'))}")
     import httpx
     httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
     httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
@@ -114,6 +136,7 @@ def lancer_bot():
     app = Application.builder().token(token).build()
     for h in [CommandHandler("start", start), CommandHandler("help", help_command),
               CommandHandler("outils", outils), CommandHandler("status", status),
+              CommandHandler("diagnostic", diagnostic),
               CommandHandler("memoire", memoire), CommandHandler("installer", installer),
               MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]:
         app.add_handler(h)

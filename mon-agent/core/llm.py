@@ -32,6 +32,8 @@ class LLMManager:
         self.gemini_disponible = bool(gemini_key)
         self.llm_actif = "groq"
         self.historique = []
+        self.derniere_erreur_groq = ""
+        self.derniere_erreur_gemini = ""
 
     def get_system_prompt(self, user_message=None):
         maintenant = maintenant_algerie()
@@ -104,7 +106,7 @@ class LLMManager:
         else:
             self.llm_actif = "groq"
         if texte is None:
-            texte = "Désolé, je ne peux pas répondre pour le moment (LLM indisponible)." if detecter_langue(user_message) == "fr" else "Sorry, I cannot answer right now (LLM unavailable)."
+            texte = "Désolé, je ne peux pas répondre pour le moment (Groq & Gemini indisponibles). Vérifie que les clés API sont définies dans Render." if detecter_langue(user_message) == "fr" else "Sorry, I cannot answer right now (Groq & Gemini unavailable). Check Render env vars."
         self.historique.append({"role": "assistant", "content": texte})
         return texte, self.llm_actif
 
@@ -118,7 +120,9 @@ class LLMManager:
             )
             return completion.choices[0].message.content
         except Exception as e:
-            log.warning(f"Erreur Groq: {e}")
+            err = f"{type(e).__name__}: {str(e)[:150]}"
+            log.warning(f"Erreur Groq: {err}")
+            self.derniere_erreur_groq = err
             return None
 
     def _appeler_gemini(self, messages):
@@ -130,5 +134,7 @@ class LLMManager:
             reponse = model.generate_content(prompt)
             return reponse.text
         except Exception as e:
-            log.warning(f"Erreur Gemini: {e}")
+            err = f"{type(e).__name__}: {str(e)[:150]}"
+            log.warning(f"Erreur Gemini: {err}")
+            self.derniere_erreur_gemini = err
             return None
