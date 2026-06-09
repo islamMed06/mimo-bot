@@ -30,14 +30,18 @@
       "notion": false
     }
   },
-  "skills": {
-    "built_in": {
-      "memoire": true,
-      "recherche_web": true,
-      "auto_install": true
+    "skills": {
+      "built_in": {
+        "memoire": true,
+        "recherche_web": true,
+        "auto_install": true,
+        "meteo": true,
+        "traducteur": true,
+        "rappel": true,
+        "conversation": true
+      },
+      "external": {}
     },
-    "external": {}
-  },
   "memoire": {
     "court_terme_max_messages": 20,
     "moyen_terme_jours": 30,
