@@ -66,6 +66,8 @@ class Agent:
 
     async def traiter_message(self, texte, user_id="default"):
         from core.router import detecter_intention, executer_intention
+        if not self.llm.historique:
+            self._restaurer_contexte(user_id)
         self.memory.ajouter_message("user", texte, user_id)
         intention = detecter_intention(texte)
         log.info(f"Intention detectee: {intention}")
@@ -82,3 +84,10 @@ class Agent:
         reponse, llm_utilise = self.llm.repondre(texte)
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
+
+    def _restaurer_contexte(self, user_id):
+        messages = self.memory.charger_conversations_recentes(user_id)
+        for m in messages:
+            self.llm.historique.append({"role": m["role"], "content": m["content"]})
+        if messages:
+            log.info(f"Contexte restaure: {len(messages)} messages pour {user_id}")
