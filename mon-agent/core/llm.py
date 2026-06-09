@@ -1,8 +1,9 @@
 import os
 import json
+import time
 import logging
 from datetime import datetime, timezone, timedelta
-from groq import Groq
+from groq import Groq, RateLimitError
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -50,7 +51,7 @@ class LLMManager:
             f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
             f"Nous sommes le {aujourdhui_fr} et il est {heure}. "
             f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
-            f"Tu utilises Groq (llama-3.3-70b) comme LLM principal et Gemini (gemini-2.0-flash) en fallback. "
+            f"Tu utilises Groq (llama-3.1-8b) comme LLM principal et Gemini (gemini-2.0-flash) en fallback. "
             f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
             f"des statistiques, de la correction d'exercices et du contrôle du site web. "
             f"Tu confirmes toujours avant les actions sensibles (création, modification, envoi, installation). "
@@ -60,7 +61,7 @@ class LLMManager:
             f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
             f"Today is {aujourdhui} and the time is {heure}. "
             f"Always reply in the user's language. Be concise, clear, and helpful. "
-            f"You use Groq (llama-3.3-70b) as your main LLM and Gemini (gemini-2.0-flash) as fallback. "
+            f"You use Groq (llama-3.1-8b) as your main LLM and Gemini (gemini-2.0-flash) as fallback. "
             f"You have tools for calendar management, emails, student grades, lesson plans, "
             f"statistics, exercise correction, and website control. "
             f"You always confirm before sensitive actions (create, modify, send, install). "
@@ -114,15 +115,30 @@ class LLMManager:
         self.historique.append({"role": "assistant", "content": texte})
         return texte, self.llm_actif
 
-    def _appeler_groq(self, messages):
+    def _appeler_groq(self, messages, tentative=1):
         try:
+            temps_attente = max(0, 2.0 - (time.time() - getattr(self, '_dernier_appel_groq', 0)))
+            if temps_attente > 0:
+                time.sleep(temps_attente)
             completion = self.groq_client.chat.completions.create(
                 model=self.config["llm"]["modele_groq"],
                 messages=messages,
                 max_tokens=self.config["llm"]["max_tokens"],
                 temperature=self.config["llm"]["temperature"]
             )
+            self._dernier_appel_groq = time.time()
             return completion.choices[0].message.content
+        except RateLimitError:
+            self._dernier_appel_groq = time.time()
+            if tentative < 4:
+                duree = 2 ** tentative
+                log.warning(f"Rate limit Groq, attente {duree}s (tentative {tentative}/3)")
+                time.sleep(duree)
+                return self._appeler_groq(messages, tentative + 1)
+            err = "RateLimitError: limite atteinte apres 3 tentatives"
+            log.warning(f"Erreur Groq: {err}")
+            self.derniere_erreur_groq = err
+            return None
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:150]}"
             log.warning(f"Erreur Groq: {err}")

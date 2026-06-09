@@ -9,7 +9,7 @@
   "llm": {
     "principal": "groq",
     "fallback": "gemini",
-    "modele_groq": "llama-3.3-70b-versatile",
+    "modele_groq": "llama-3.1-8b-instant",
     "modele_gemini": "gemini-2.0-flash",
     "max_tokens": 2048,
     "temperature": 0.7
@@ -50,7 +50,7 @@
       "external": {}
     },
   "memoire": {
-    "court_terme_max_messages": 150,
+    "court_terme_max_messages": 30,
     "moyen_terme_jours": 30,
     "long_terme_actif": true,
     "auto_resume": true,
