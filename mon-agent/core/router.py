@@ -12,7 +12,11 @@ MOTS_CLEFS = {
     "stats": ["statistique", "graphique", "progression", "rapport", "moyenne", "classe", "stats", "chart", "graph"],
     "site_web": ["site", "utilisateur", "inscrit", "premium", "upload", "fichier", "dossier", "website", "user", "file"],
     "recherche": ["cherche", "recherche", "google", "internet", "actualite", "info", "qu-est-ce que", "search", "what is", "difference entre"],
-    "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "mcp", "package", "dependance", "tool"]
+    "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "mcp", "package", "dependance", "tool"],
+    "meteo": ["meteo", "météo", "temps", "température", "weather", "temperature", "quel temps"],
+    "traduction": ["traduis", "traduit", "traduction", "translate", "translation"],
+    "rappel": ["rappel", "rappelle", "rappeler", "remind", "reminder", "dans 1", "dans 2", "dans 3", "dans 5", "dans 10", "dans 15", "dans 30"],
+    "conversation": ["mode libre", "mode chat", "chat mode", "conversation", "active le chat", "desactive le chat"]
 }
 
 def detecter_intention(texte):
@@ -49,4 +53,12 @@ def executer_intention(intention, texte, outils):
         return outils.get("recherche_web", None)
     elif intention == "installation":
         return outils.get("auto_install", None)
+    elif intention == "meteo":
+        return outils.get("meteo", None)
+    elif intention == "traduction":
+        return outils.get("traducteur", None)
+    elif intention == "rappel":
+        return outils.get("rappel", None)
+    elif intention == "conversation":
+        return outils.get("conversation", None)
     return None
