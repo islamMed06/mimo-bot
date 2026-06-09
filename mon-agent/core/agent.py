@@ -73,6 +73,7 @@ class Agent:
         self.outils.update(outils_mcp)
 
     async def traiter_message(self, texte, user_id="default"):
+        import re
         from core.router import detecter_intention, executer_intention
         if not self.llm.historique:
             self._restaurer_contexte(user_id)
@@ -81,15 +82,17 @@ class Agent:
         log.info(f"Intention detectee: {intention}")
         outil = executer_intention(intention, texte, self.outils)
         if outil:
-            try:
-                if hasattr(outil, 'executer'):
-                    resultat = await outil.executer(texte)
-                else:
-                    resultat = await outil(texte)
-                if resultat is not None:
-                    return resultat, intention
-            except Exception as e:
-                log.warning(f"Erreur outil {intention}: {e}")
+            est_question = bool(re.search(r'\b(si|est-ce que|peux.tu|es.tu|vas.tu|qu-est-ce|comment)\b', texte.lower())) and '?' in texte
+            if not est_question:
+                try:
+                    if hasattr(outil, 'executer'):
+                        resultat = await outil.executer(texte)
+                    else:
+                        resultat = await outil(texte)
+                    if resultat is not None:
+                        return resultat, intention
+                except Exception as e:
+                    log.warning(f"Erreur outil {intention}: {e}")
         reponse, llm_utilise = self.llm.repondre(texte)
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
