@@ -67,6 +67,26 @@ class MemoryManager:
             sujets.append(c)
         return f"Resume session: {' | '.join(sujets[-5:])}"
 
+    def sauvegarder_resume(self, resume, user_id="default"):
+        if not self.db:
+            return
+        try:
+            ref = self.db.collection("conversations").document(user_id).collection("resumes").document("dernier")
+            ref.set({"resume": resume, "timestamp": datetime.now().isoformat()})
+        except Exception as e:
+            log.warning(f"Erreur sauvegarde resume: {e}")
+
+    def charger_resume(self, user_id="default"):
+        if not self.db:
+            return None
+        try:
+            doc = self.db.collection("conversations").document(user_id).collection("resumes").document("dernier").get()
+            if doc.exists:
+                return doc.to_dict().get("resume")
+        except Exception as e:
+            log.warning(f"Erreur chargement resume: {e}")
+        return None
+
     def _sauvegarder_firebase(self, role, contenu, user_id):
         try:
             maintenant = datetime.now()
@@ -83,7 +103,7 @@ class MemoryManager:
         except Exception as e:
             log.warning(f"Erreur sauvegarde Firebase: {e}")
 
-    def charger_conversations_recentes(self, user_id="default", limit=20):
+    def charger_conversations_recentes(self, user_id="default", limit=150):
         if not self.db:
             return []
         try:
