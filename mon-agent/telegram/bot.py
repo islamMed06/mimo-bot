@@ -26,9 +26,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Bonjour ! Je suis {nom}.\nUtilise /help pour les commandes.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/memoire - Profil"
-    )
+    await update.message.reply_text("/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/memoire - Profil")
 
 async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
@@ -41,20 +39,13 @@ async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
     llm = LLM_INDICATEURS.get(a.llm.llm_actif, a.llm.llm_actif)
-    await update.message.reply_text(
-        f"**{a.config['agent']['nom']}**\nVersion: {a.config['agent']['version']}\n"
-        f"LLM: {llm}\nMemoire: {len(a.memory.court_terme)} messages\n"
-        f"Outils: {len(a.outils)}"
-    )
+    await update.message.reply_text(f"**{a.config['agent']['nom']}**\nVersion: {a.config['agent']['version']}\nLLM: {llm}\nMemoire: {len(a.memory.court_terme)} messages\nOutils: {len(a.outils)}")
 
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
     profil = a.memory.charger_profil(str(update.effective_user.id))
     prefs = profil.get("preferences", {})
-    await update.message.reply_text(
-        f"**Profil**\nLangue: {prefs.get('langue', 'fr')}\n"
-        f"Messages session: {len(a.memory.court_terme)}"
-    )
+    await update.message.reply_text(f"**Profil**\nLangue: {prefs.get('langue', 'fr')}\nMessages session: {len(a.memory.court_terme)}")
 
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package = " ".join(context.args) if context.args else ""
@@ -116,6 +107,10 @@ def lancer_bot():
     if not token:
         log.error("TELEGRAM_TOKEN manquant")
         return
+    import httpx
+    httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
+    httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
+    time.sleep(2)
     app = Application.builder().token(token).build()
     for h in [CommandHandler("start", start), CommandHandler("help", help_command),
               CommandHandler("outils", outils), CommandHandler("status", status),
@@ -123,7 +118,10 @@ def lancer_bot():
               MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]:
         app.add_handler(h)
     log.info("MimoBot demarre...")
-    app.run_polling(drop_pending_updates=True, allowed_updates=["message"])
+    try:
+        app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
+    except Exception:
+        pass
 
 def main():
     port = int(os.environ.get("PORT", 10000))
