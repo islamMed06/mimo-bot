@@ -106,7 +106,11 @@ class LLMManager:
         else:
             self.llm_actif = "groq"
         if texte is None:
-            texte = "Désolé, je ne peux pas répondre pour le moment (Groq & Gemini indisponibles). Vérifie que les clés API sont définies dans Render." if detecter_langue(user_message) == "fr" else "Sorry, I cannot answer right now (Groq & Gemini unavailable). Check Render env vars."
+            erreur = self.derniere_erreur_groq or self.derniere_erreur_gemini or "cause inconnue"
+            if detecter_langue(user_message) == "fr":
+                texte = f"❌ LLM indisponible. Erreur: {erreur}. Vérifie les clés API dans Render → Environment."
+            else:
+                texte = f"❌ LLM unavailable. Error: {erreur}. Check Render → Environment variables."
         self.historique.append({"role": "assistant", "content": texte})
         return texte, self.llm_actif
 

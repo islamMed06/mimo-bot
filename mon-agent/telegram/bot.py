@@ -66,6 +66,18 @@ async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prefs = profil.get("preferences", {})
     await update.message.reply_text(f"**Profil**\nLangue: {prefs.get('langue', 'fr')}\nMessages session: {len(a.memory.court_terme)}")
 
+async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    a = get_agent()
+    await update.message.reply_text("Test Groq en cours...")
+    try:
+        r = a.llm._appeler_groq([{"role": "user", "content": "dis hello en 2 mots"}])
+        if r:
+            await update.message.reply_text(f"✅ Groq OK: {r}")
+        else:
+            await update.message.reply_text(f"❌ Groq a retourne None. Erreur: {a.llm.derniere_erreur_groq}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Groq exception: {type(e).__name__}: {str(e)[:200]}")
+
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package = " ".join(context.args) if context.args else ""
     if not package:
@@ -136,11 +148,18 @@ def lancer_bot():
     app = Application.builder().token(token).build()
     for h in [CommandHandler("start", start), CommandHandler("help", help_command),
               CommandHandler("outils", outils), CommandHandler("status", status),
-              CommandHandler("diagnostic", diagnostic),
+              CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
               CommandHandler("memoire", memoire), CommandHandler("installer", installer),
               MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]:
         app.add_handler(h)
     log.info("MimoBot demarre...")
+    a_test = get_agent()
+    log.info("Test Groq au demarrage...")
+    try:
+        test = a_test.llm._appeler_groq([{"role": "user", "content": "say ok 1 word"}])
+        log.info(f"Groq test: {'OK' if test else 'FAILED: ' + a_test.llm.derniere_erreur_groq}")
+    except Exception as e:
+        log.error(f"Groq test exception: {e}")
     try:
         app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
     except Exception:
