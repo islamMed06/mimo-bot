@@ -22,8 +22,9 @@ def detecter_langue(texte):
     return "fr" if mots_fr > 0 else "en"
 
 class LLMManager:
-    def __init__(self, config):
+    def __init__(self, config, memory=None):
         self.config = config
+        self.memory = memory
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
@@ -65,8 +66,30 @@ class LLMManager:
         )
         return base_en if langue == "en" else base_fr
 
+    def _resumer_anciens(self):
+        anciens = self.historique[:-self.config["memoire"]["court_terme_max_messages"]]
+        if len(anciens) > 5:
+            texte = "\n".join([f"{m['role']}: {m['content'][:200]}" for m in anciens])
+            try:
+                completion = self.groq_client.chat.completions.create(
+                    model=self.config["llm"]["modele_groq"],
+                    messages=[{"role": "system", "content": "Resume cette conversation en 2-3 phrases, en francais."},
+                              {"role": "user", "content": texte}],
+                    max_tokens=200
+                )
+                resume = completion.choices[0].message.content
+                if self.memory:
+                    self.memory.sauvegarder_resume(resume)
+                self.historique = self.historique[-self.config["memoire"]["court_terme_max_messages"]:]
+                self.historique.insert(0, {"role": "system", "content": f"[Resume conversation precedente] {resume}"})
+                log.info("Anciens messages resumes automatiquement")
+            except Exception as e:
+                log.warning(f"Erreur resume: {e}")
+
     def repondre(self, user_message):
         self.historique.append({"role": "user", "content": user_message})
+        if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 1.5:
+            self._resumer_anciens()
         messages = [
             {"role": "system", "content": self.get_system_prompt(user_message)}
         ]
