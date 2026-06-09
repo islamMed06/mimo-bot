@@ -39,6 +39,10 @@ class Agent:
         from skills.built_in.recherche_web import RechercheWebSkill
         from skills.built_in.auto_install import AutoInstallSkill
         from skills.built_in.memoire import MemoireSkill
+        from skills.built_in.meteo import MeteoSkill
+        from skills.built_in.traducteur import TraducteurSkill
+        from skills.built_in.rappel import RappelSkill
+        from skills.built_in.conversation import ConversationSkill
         from tools.mcp.loader import MCPLoader
 
         mapping = {
@@ -52,6 +56,10 @@ class Agent:
             "recherche_web": RechercheWebSkill,
             "auto_install": AutoInstallSkill,
             "memoire": MemoireSkill,
+            "meteo": MeteoSkill,
+            "traducteur": TraducteurSkill,
+            "rappel": RappelSkill,
+            "conversation": ConversationSkill,
         }
         for nom, classe in mapping.items():
             if nom in cfg_outils and cfg_outils[nom]:
