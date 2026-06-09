@@ -160,7 +160,7 @@ def lancer_bot():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message))
     log.info("MimoBot demarre...")
     try:
-        app.run_polling(drop_pending_updates=True, allowed_updates=["message"], read_timeout=30, write_timeout=30, connect_timeout=30, pool_timeout=30)
+        app.run_polling(drop_pending_updates=True, allowed_updates=["message"])
     except Exception as e:
         log.error(f"Erreur polling: {e}")
     return True
