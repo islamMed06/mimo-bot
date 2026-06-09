@@ -19,6 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 log = logging.getLogger("BOT")
 
 agent = None
+stop_keepalive = False
 
 LLM_INDICATEURS = {
     "groq": "llama-3.3-70b",
@@ -37,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Bonjour ! Je suis {nom}, ton assistant AI personnel.\n\n"
         f"Je peux t'aider a :\n"
         f"- Repondre a tes questions\n"
-        f"- Gerer ton calendrier\n"
+        f"- Gerer mon calendrier\n"
         f"- Corriger des exercices\n"
         f"- Gerer les notes des eleves\n"
         f"- Generer des fiches de lecons\n"
@@ -112,7 +113,6 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
         reponse, source = await get_agent().traiter_message(texte, user_id)
-        llm_nom = LLM_INDICATEURS.get(source, source)
         if isinstance(reponse, str):
             await update.message.reply_text(reponse)
         elif isinstance(reponse, dict) and reponse.get("type") == "confirmation":
@@ -133,23 +133,35 @@ class SanteHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"MimoBot OK")
-
     def log_message(self, format, *args):
         pass
 
 def run_http():
     port = int(os.environ.get("PORT", 10000))
     serveur = HTTPServer(("0.0.0.0", port), SanteHandler)
-    log.info(f"HTTP prêt sur le port {port}")
+    log.info(f"HTTP pret sur le port {port}")
     serveur.serve_forever()
 
-def lancer_bot():
+def keepalice_boucle():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    while not stop_keepalive:
+        loop.run_until_complete(asyncio.sleep(600))
+        try:
+            import httpx
+            token = os.getenv("TELEGRAM_TOKEN")
+            httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+            log.debug("Keepalive OK")
+        except Exception as e:
+            log.warning(f"Keepalive: {e}")
+
+def lancer_polling():
     global agent
     agent = None
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
-        log.error("TELEGRAM_TOKEN manquant dans .env")
-        return False
+        log.error("TELEGRAM_TOKEN manquant")
+        return
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -159,21 +171,20 @@ def lancer_bot():
     app.add_handler(CommandHandler("installer", installer))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message))
     log.info("MimoBot demarre...")
-    try:
-        app.run_polling(drop_pending_updates=True, allowed_updates=["message"])
-    except Exception as e:
-        log.error(f"Erreur polling: {e}")
-    return True
+    app.run_polling(drop_pending_updates=True, allowed_updates=["message"])
 
 def main():
-    t = threading.Thread(target=run_http, daemon=True)
-    t.start()
+    global stop_keepalive
+    t_http = threading.Thread(target=run_http, daemon=True)
+    t_http.start()
+    t_keep = threading.Thread(target=keepalice_boucle, daemon=True)
+    t_keep.start()
     while True:
         try:
-            lancer_bot()
+            lancer_polling()
         except Exception as e:
             log.error(f"Bot crashed: {e}")
-        log.info("Redemarrage du bot dans 3 secondes...")
+        log.info("Redemarrage dans 3 secondes...")
         time.sleep(3)
 
 if __name__ == "__main__":
