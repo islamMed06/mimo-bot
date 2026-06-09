@@ -86,7 +86,8 @@ class Agent:
                     resultat = await outil.executer(texte)
                 else:
                     resultat = await outil(texte)
-                return resultat, intention
+                if resultat is not None:
+                    return resultat, intention
             except Exception as e:
                 log.warning(f"Erreur outil {intention}: {e}")
         reponse, llm_utilise = self.llm.repondre(texte)
