@@ -18,15 +18,21 @@ from core.agent import Agent
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("BOT")
 
-agent = Agent()
+agent = None
 
 LLM_INDICATEURS = {
     "groq": "llama-3.3-70b",
     "gemini": "gemini-2.0-flash"
 }
 
+def get_agent():
+    global agent
+    if agent is None:
+        agent = Agent()
+    return agent
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    nom = agent.config["agent"]["nom"]
+    nom = get_agent().config["agent"]["nom"]
     await update.message.reply_text(
         f"Bonjour ! Je suis {nom}, ton assistant AI personnel.\n\n"
         f"Je peux t'aider a :\n"
@@ -51,35 +57,38 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    a = get_agent()
     lignes = ["**Outils actifs :**"]
-    for nom, outil in agent.outils.items():
+    for nom, outil in a.outils.items():
         lignes.append(f"- {nom}")
     lignes.append("")
     lignes.append("**LLM :**")
-    lignes.append(f"- Principal : {agent.config['llm']['modele_groq']}")
-    lignes.append(f"- Fallback : {agent.config['llm']['modele_gemini']}")
+    lignes.append(f"- Principal : {a.config['llm']['modele_groq']}")
+    lignes.append(f"- Fallback : {a.config['llm']['modele_gemini']}")
     await update.message.reply_text("\n".join(lignes))
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    llm = LLM_INDICATEURS.get(agent.llm.llm_actif, agent.llm.llm_actif)
-    taille_memoire = len(agent.memory.court_terme)
+    a = get_agent()
+    llm = LLM_INDICATEURS.get(a.llm.llm_actif, a.llm.llm_actif)
+    taille_memoire = len(a.memory.court_terme)
     await update.message.reply_text(
-        f"**{agent.config['agent']['nom']} - Status**\n\n"
-        f"Version: {agent.config['agent']['version']}\n"
+        f"**{a.config['agent']['nom']} - Status**\n\n"
+        f"Version: {a.config['agent']['version']}\n"
         f"LLM actif: {llm}\n"
-        f"Mode autonomie: {agent.config['agent']['mode_autonomie']}\n"
+        f"Mode autonomie: {a.config['agent']['mode_autonomie']}\n"
         f"Memoire session: {taille_memoire} messages\n"
-        f"Outils charges: {len(agent.outils)}"
+        f"Outils charges: {len(a.outils)}"
     )
 
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    profil = agent.memory.charger_profil(str(update.effective_user.id))
+    a = get_agent()
+    profil = a.memory.charger_profil(str(update.effective_user.id))
     prefs = profil.get("preferences", {})
     await update.message.reply_text(
         f"**Ce que je sais de toi :**\n\n"
         f"Langue preferee: {prefs.get('langue', 'fr')}\n"
         f"Style reponse: {prefs.get('style_reponse', 'court')}\n"
-        f"Messages session: {len(agent.memory.court_terme)}"
+        f"Messages session: {len(a.memory.court_terme)}"
     )
 
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +96,7 @@ async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not package:
         await update.message.reply_text("Usage: /installer <nom_package>")
         return
-    outil = agent.outils.get("auto_install")
+    outil = get_agent().outils.get("auto_install")
     if not outil:
         await update.message.reply_text("Outil d'installation non disponible.")
         return
@@ -102,7 +111,7 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texte = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
-        reponse, source = await agent.traiter_message(texte, user_id)
+        reponse, source = await get_agent().traiter_message(texte, user_id)
         llm_nom = LLM_INDICATEURS.get(source, source)
         if isinstance(reponse, str):
             await update.message.reply_text(reponse)
@@ -135,6 +144,8 @@ def run_http():
     serveur.serve_forever()
 
 def lancer_bot():
+    global agent
+    agent = None
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         log.error("TELEGRAM_TOKEN manquant dans .env")
@@ -148,7 +159,10 @@ def lancer_bot():
     app.add_handler(CommandHandler("installer", installer))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message))
     log.info("MimoBot demarre...")
-    app.run_polling()
+    try:
+        app.run_polling(drop_pending_updates=True, allowed_updates=["message"], read_timeout=30, write_timeout=30, connect_timeout=30, pool_timeout=30)
+    except Exception as e:
+        log.error(f"Erreur polling: {e}")
     return True
 
 def main():
@@ -159,8 +173,8 @@ def main():
             lancer_bot()
         except Exception as e:
             log.error(f"Bot crashed: {e}")
-        log.info("Redemarrage du bot dans 5 secondes...")
-        time.sleep(5)
+        log.info("Redemarrage du bot dans 3 secondes...")
+        time.sleep(3)
 
 if __name__ == "__main__":
     main()
