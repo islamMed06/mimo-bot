@@ -23,7 +23,7 @@ class Agent:
         from core.memory import MemoryManager
         from core.llm import LLMManager
         self.memory = MemoryManager(self.config)
-        self.llm = LLMManager(self.config)
+        self.llm = LLMManager(self.config, memory=self.memory)
         self._charger_outils()
         log.info(f"{self.config['agent']['nom']} v{self.config['agent']['version']} initialise")
 
@@ -98,8 +98,11 @@ class Agent:
         return reponse, llm_utilise
 
     def _restaurer_contexte(self, user_id):
+        resume = self.memory.charger_resume(user_id)
+        if resume:
+            self.llm.historique.append({"role": "system", "content": f"[Resume conversation precedente] {resume}"})
         messages = self.memory.charger_conversations_recentes(user_id)
         for m in messages:
             self.llm.historique.append({"role": m["role"], "content": m["content"]})
-        if messages:
-            log.info(f"Contexte restaure: {len(messages)} messages pour {user_id}")
+        if messages or resume:
+            log.info(f"Contexte restaure: {len(messages)} messages + resume pour {user_id}")
