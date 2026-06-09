@@ -13,7 +13,7 @@ MOTS_CLEFS = {
     "site_web": ["site", "utilisateur", "inscrit", "premium", "upload", "fichier", "dossier", "website", "user", "file"],
     "recherche": ["cherche", "recherche", "google", "internet", "actualite", "info", "qu-est-ce que", "search", "what is", "difference entre"],
     "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "mcp", "package", "dependance", "tool"],
-    "meteo": ["meteo", "météo", "temps", "température", "weather", "temperature", "quel temps"],
+    "meteo": ["meteo", "météo", "weather", "wttr"],
     "traduction": ["traduis", "traduit", "traduction", "translate", "translation"],
     "rappel": ["rappel", "rappelle", "rappeler", "remind", "reminder", "dans 1", "dans 2", "dans 3", "dans 5", "dans 10", "dans 15", "dans 30"],
     "conversation": ["mode libre", "mode chat", "chat mode", "conversation", "active le chat", "desactive le chat"]
