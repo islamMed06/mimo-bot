@@ -35,6 +35,8 @@ class LLMManager:
         self.historique = []
         self.derniere_erreur_groq = ""
         self.derniere_erreur_gemini = ""
+        self.derniere_erreur_openrouter = ""
+        self.derniere_erreur_deepseek = ""
 
     def get_system_prompt(self, user_message=None):
         maintenant = maintenant_algerie()
@@ -51,7 +53,7 @@ class LLMManager:
             f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
             f"Nous sommes le {aujourdhui_fr} et il est {heure}. "
             f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
-            f"Tu utilises Groq (llama-3.1-8b) comme LLM principal et Gemini (gemini-2.0-flash) en fallback. "
+            f"Tu utilises Groq (llama3.1), Gemini (flash), OpenRouter ou DeepSeek comme LLM (fallback automatique). "
             f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
             f"des statistiques, de la correction d'exercices et du contrôle du site web. "
             f"Tu confirmes toujours avant les actions sensibles (création, modification, envoi, installation). "
@@ -61,7 +63,7 @@ class LLMManager:
             f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
             f"Today is {aujourdhui} and the time is {heure}. "
             f"Always reply in the user's language. Be concise, clear, and helpful. "
-            f"You use Groq (llama-3.1-8b) as your main LLM and Gemini (gemini-2.0-flash) as fallback. "
+            f"You use Groq (llama3.1), Gemini (flash), OpenRouter or DeepSeek as LLM (auto fallback). "
             f"You have tools for calendar management, emails, student grades, lesson plans, "
             f"statistics, exercise correction, and website control. "
             f"You always confirm before sensitive actions (create, modify, send, install). "
@@ -99,15 +101,25 @@ class LLMManager:
         for msg in self.historique[-self.config["memoire"]["court_terme_max_messages"]:]:
             messages.append(msg)
         texte = self._appeler_groq(messages)
-        if texte is None:
+        if texte:
+            self.llm_actif = "groq"
+        else:
             log.info("Groq indisponible, fallback vers Gemini")
             texte = self._appeler_gemini(messages)
             if texte:
                 self.llm_actif = "gemini"
-        else:
-            self.llm_actif = "groq"
+            else:
+                log.info("Gemini indisponible, fallback vers OpenRouter")
+                texte = self._appeler_openrouter(messages)
+                if texte:
+                    self.llm_actif = "openrouter"
+                else:
+                    log.info("OpenRouter indisponible, fallback vers DeepSeek")
+                    texte = self._appeler_deepseek(messages)
+                    if texte:
+                        self.llm_actif = "deepseek"
         if texte is None:
-            erreur = self.derniere_erreur_groq or self.derniere_erreur_gemini or "cause inconnue"
+            erreur = self.derniere_erreur_groq or self.derniere_erreur_gemini or self.derniere_erreur_openrouter or self.derniere_erreur_deepseek or "cause inconnue"
             if detecter_langue(user_message) == "fr":
                 texte = f"❌ LLM indisponible. Erreur: {erreur}. Vérifie les clés API dans Render → Environment."
             else:
@@ -158,3 +170,42 @@ class LLMManager:
             log.warning(f"Erreur Gemini: {err}")
             self.derniere_erreur_gemini = err
             return None
+
+    def _appeler_openai_compat(self, url, api_key, model, messages, nom):
+        import httpx
+        try:
+            resp = httpx.post(url, json={
+                "model": model, "messages": messages,
+                "max_tokens": self.config["llm"]["max_tokens"],
+                "temperature": self.config["llm"]["temperature"]
+            }, headers={"Authorization": f"Bearer {api_key}"}, timeout=30)
+            if resp.status_code == 429:
+                err = f"RateLimitError: {resp.text[:100]}"
+                setattr(self, f"derniere_erreur_{nom}", err)
+                log.warning(f"Rate limit {nom}: {err}")
+                return None
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            err = f"{type(e).__name__}: {str(e)[:150]}"
+            log.warning(f"Erreur {nom}: {err}")
+            setattr(self, f"derniere_erreur_{nom}", err)
+            return None
+
+    def _appeler_openrouter(self, messages):
+        key = os.getenv("OPENROUTER_API_KEY")
+        if not key:
+            return None
+        return self._appeler_openai_compat(
+            "https://openrouter.ai/api/v1/chat/completions",
+            key, self.config["llm"]["modele_openrouter"], messages, "openrouter"
+        )
+
+    def _appeler_deepseek(self, messages):
+        key = os.getenv("DEEPSEEK_API_KEY")
+        if not key:
+            return None
+        return self._appeler_openai_compat(
+            "https://api.deepseek.com/v1/chat/completions",
+            key, self.config["llm"]["modele_deepseek"], messages, "deepseek"
+        )

@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 log = logging.getLogger("BOT")
 
 agent = None
-LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash"}
+LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "mixtral-8x7b", "deepseek": "deepseek-chat"}
 
 def get_agent():
     global agent
@@ -46,17 +46,17 @@ async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
     groq_key = "✅" if os.getenv("GROQ_API_KEY") else "❌"
     gemini_key = "✅" if os.getenv("GEMINI_API_KEY") else "❌"
-    firebase_key = "✅" if os.getenv("FIREBASE_PRIVATE_KEY") else "❌"
+    or_key = "✅" if os.getenv("OPENROUTER_API_KEY") else "❌"
+    ds_key = "✅" if os.getenv("DEEPSEEK_API_KEY") else "❌"
+    fb_key = "✅" if os.getenv("FIREBASE_PRIVATE_KEY") else "❌"
     lignes = [
         "**Diagnostic MimoBot**",
-        f"GROQ_API_KEY: {groq_key}",
-        f"GEMINI_API_KEY: {gemini_key}",
-        f"FIREBASE_PRIVATE_KEY: {firebase_key}",
-        f"Derniere erreur Groq: {a.llm.derniere_erreur_groq or 'aucune'}",
-        f"Derniere erreur Gemini: {a.llm.derniere_erreur_gemini or 'aucune'}",
+        f"GROQ_API_KEY: {groq_key} | GEMINI_API_KEY: {gemini_key}",
+        f"OPENROUTER_API_KEY: {or_key} | DEEPSEEK_API_KEY: {ds_key}",
+        f"FIREBASE: {fb_key}",
         f"LLM actif: {a.llm.llm_actif}",
-        f"Historique LLM: {len(a.llm.historique)} messages",
-        f"Memoire court terme: {len(a.memory.court_terme)} messages",
+        f"Erreurs: Groq={a.llm.derniere_erreur_groq or 'ok'} | Gemini={a.llm.derniere_erreur_gemini or 'ok'} | OpenRouter={a.llm.derniere_erreur_openrouter or 'ok'} | DeepSeek={a.llm.derniere_erreur_deepseek or 'ok'}",
+        f"Historique: {len(a.llm.historique)} msgs | Memoire: {len(a.memory.court_terme)} msgs",
     ]
     await update.message.reply_text("\n".join(lignes))
 
@@ -68,15 +68,21 @@ async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
-    await update.message.reply_text("Test Groq en cours...")
-    try:
-        r = a.llm._appeler_groq([{"role": "user", "content": "dis hello en 2 mots"}])
-        if r:
-            await update.message.reply_text(f"✅ Groq OK: {r}")
-        else:
-            await update.message.reply_text(f"❌ Groq a retourne None. Erreur: {a.llm.derniere_erreur_groq}")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Groq exception: {type(e).__name__}: {str(e)[:200]}")
+    msg = await update.message.reply_text("Test de tous les LLM...")
+    test_msg = [{"role": "user", "content": "reponds 'ok' en 1 mot"}]
+    resultats = []
+    for nom, methode in [("Groq", a.llm._appeler_groq), ("Gemini", a.llm._appeler_gemini),
+                          ("OpenRouter", a.llm._appeler_openrouter), ("DeepSeek", a.llm._appeler_deepseek)]:
+        try:
+            r = methode(test_msg)
+            if r:
+                resultats.append(f"✅ {nom}: {r[:50]}")
+            else:
+                erreur = getattr(a.llm, f"derniere_erreur_{nom.lower()}", "inconnue")
+                resultats.append(f"❌ {nom}: {erreur[:80]}")
+        except Exception as e:
+            resultats.append(f"❌ {nom}: {type(e).__name__}: {str(e)[:80]}")
+    await msg.edit_text("\n".join(resultats))
 
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package = " ".join(context.args) if context.args else ""
@@ -138,9 +144,7 @@ def lancer_bot():
     if not token:
         log.error("TELEGRAM_TOKEN manquant")
         return
-    log.info(f"GROQ_API_KEY present: {bool(os.getenv('GROQ_API_KEY'))}")
-    log.info(f"GEMINI_API_KEY present: {bool(os.getenv('GEMINI_API_KEY'))}")
-    log.info(f"FIREBASE_PRIVATE_KEY present: {bool(os.getenv('FIREBASE_PRIVATE_KEY'))}")
+    log.info(f"GROQ: {bool(os.getenv('GROQ_API_KEY'))} | GEMINI: {bool(os.getenv('GEMINI_API_KEY'))} | OPENROUTER: {bool(os.getenv('OPENROUTER_API_KEY'))} | DEEPSEEK: {bool(os.getenv('DEEPSEEK_API_KEY'))}")
     import httpx
     httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
     httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
