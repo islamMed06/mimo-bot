@@ -11,8 +11,9 @@
     "fallback": "gemini",
     "modele_groq": "llama-3.1-8b-instant",
     "modele_gemini": "gemini-2.0-flash",
-    "modele_openrouter": "google/gemma-2-9b-it:free",
-    "modele_deepseek": "deepseek-chat",
+    "modele_openrouter": "meta-llama/llama-3.3-70b-instruct:free",
+    "modele_huggingface": "microsoft/Phi-3-mini-4k-instruct",
+    "modele_github": "gpt-4o-mini",
     "max_tokens": 2048,
     "temperature": 0.7
   },

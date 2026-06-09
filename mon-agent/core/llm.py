@@ -36,7 +36,9 @@ class LLMManager:
         self.derniere_erreur_groq = ""
         self.derniere_erreur_gemini = ""
         self.derniere_erreur_openrouter = ""
-        self.derniere_erreur_deepseek = ""
+        self.derniere_erreur_huggingface = ""
+        self.derniere_erreur_cloudflare = ""
+        self.derniere_erreur_github = ""
 
     def get_system_prompt(self, user_message=None):
         maintenant = maintenant_algerie()
