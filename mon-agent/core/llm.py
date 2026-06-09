@@ -33,12 +33,8 @@ class LLMManager:
         self.gemini_disponible = bool(gemini_key)
         self.llm_actif = "groq"
         self.historique = []
-        self.derniere_erreur_groq = ""
-        self.derniere_erreur_gemini = ""
-        self.derniere_erreur_openrouter = ""
-        self.derniere_erreur_huggingface = ""
-        self.derniere_erreur_cloudflare = ""
-        self.derniere_erreur_github = ""
+        for nom in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]:
+            setattr(self, f"derniere_erreur_{nom}", "")
 
     def get_system_prompt(self, user_message=None):
         maintenant = maintenant_algerie()
@@ -55,7 +51,7 @@ class LLMManager:
             f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
             f"Nous sommes le {aujourdhui_fr} et il est {heure}. "
             f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
-            f"Tu utilises Groq (llama3.1), Gemini (flash), OpenRouter ou DeepSeek comme LLM (fallback automatique). "
+            f"Tu utilises Groq, Gemini, OpenRouter, HuggingFace, Cloudflare ou GitHub Models comme LLM (fallback automatique). "
             f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
             f"des statistiques, de la correction d'exercices et du contrôle du site web. "
             f"Tu confirmes toujours avant les actions sensibles (création, modification, envoi, installation). "
@@ -65,7 +61,7 @@ class LLMManager:
             f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
             f"Today is {aujourdhui} and the time is {heure}. "
             f"Always reply in the user's language. Be concise, clear, and helpful. "
-            f"You use Groq (llama3.1), Gemini (flash), OpenRouter or DeepSeek as LLM (auto fallback). "
+            f"You use Groq, Gemini, OpenRouter, HuggingFace, Cloudflare or GitHub Models as LLM (auto fallback). "
             f"You have tools for calendar management, emails, student grades, lesson plans, "
             f"statistics, exercise correction, and website control. "
             f"You always confirm before sensitive actions (create, modify, send, install). "
@@ -102,26 +98,23 @@ class LLMManager:
         ]
         for msg in self.historique[-self.config["memoire"]["court_terme_max_messages"]:]:
             messages.append(msg)
-        texte = self._appeler_groq(messages)
-        if texte:
-            self.llm_actif = "groq"
-        else:
-            log.info("Groq indisponible, fallback vers Gemini")
-            texte = self._appeler_gemini(messages)
+        fallbacks = [
+            ("groq", self._appeler_groq),
+            ("gemini", self._appeler_gemini),
+            ("openrouter", self._appeler_openrouter),
+            ("huggingface", self._appeler_huggingface),
+            ("cloudflare", self._appeler_cloudflare),
+            ("github", self._appeler_github),
+        ]
+        for nom, methode in fallbacks:
+            texte = methode(messages)
             if texte:
-                self.llm_actif = "gemini"
-            else:
-                log.info("Gemini indisponible, fallback vers OpenRouter")
-                texte = self._appeler_openrouter(messages)
-                if texte:
-                    self.llm_actif = "openrouter"
-                else:
-                    log.info("OpenRouter indisponible, fallback vers DeepSeek")
-                    texte = self._appeler_deepseek(messages)
-                    if texte:
-                        self.llm_actif = "deepseek"
+                self.llm_actif = nom
+                break
+            log.info(f"{nom} indisponible, fallback suivant...")
         if texte is None:
-            erreur = self.derniere_erreur_groq or self.derniere_erreur_gemini or self.derniere_erreur_openrouter or self.derniere_erreur_deepseek or "cause inconnue"
+            erreurs_llm = [getattr(self, f"derniere_erreur_{n}", "") for n in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]]
+            erreur = next((e for e in erreurs_llm if e), "cause inconnue")
             if detecter_langue(user_message) == "fr":
                 texte = f"❌ LLM indisponible. Erreur: {erreur}. Vérifie les clés API dans Render → Environment."
             else:
@@ -203,11 +196,30 @@ class LLMManager:
             key, self.config["llm"]["modele_openrouter"], messages, "openrouter"
         )
 
-    def _appeler_deepseek(self, messages):
-        key = os.getenv("DEEPSEEK_API_KEY")
+    def _appeler_huggingface(self, messages):
+        key = os.getenv("HF_API_KEY")
         if not key:
             return None
         return self._appeler_openai_compat(
-            "https://api.deepseek.com/v1/chat/completions",
-            key, self.config["llm"]["modele_deepseek"], messages, "deepseek"
+            "https://api-inference.huggingface.co/v1/chat/completions",
+            key, self.config["llm"]["modele_huggingface"], messages, "huggingface"
+        )
+
+    def _appeler_cloudflare(self, messages):
+        key = os.getenv("CLOUDFLARE_API_TOKEN")
+        account = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+        if not key or not account:
+            return None
+        return self._appeler_openai_compat(
+            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/chat/completions",
+            key, self.config["llm"]["modele_cloudflare"], messages, "cloudflare"
+        )
+
+    def _appeler_github(self, messages):
+        key = os.getenv("GITHUB_TOKEN")
+        if not key:
+            return None
+        return self._appeler_openai_compat(
+            "https://models.inference.ai.azure.com/chat/completions",
+            key, self.config["llm"]["modele_github"], messages, "github"
         )

@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 log = logging.getLogger("BOT")
 
 agent = None
-LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "mixtral-8x7b", "deepseek": "deepseek-chat"}
+LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
     global agent
@@ -44,20 +44,13 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import os
     a = get_agent()
-    groq_key = "✅" if os.getenv("GROQ_API_KEY") else "❌"
-    gemini_key = "✅" if os.getenv("GEMINI_API_KEY") else "❌"
-    or_key = "✅" if os.getenv("OPENROUTER_API_KEY") else "❌"
-    ds_key = "✅" if os.getenv("DEEPSEEK_API_KEY") else "❌"
-    fb_key = "✅" if os.getenv("FIREBASE_PRIVATE_KEY") else "❌"
-    lignes = [
-        "**Diagnostic MimoBot**",
-        f"GROQ_API_KEY: {groq_key} | GEMINI_API_KEY: {gemini_key}",
-        f"OPENROUTER_API_KEY: {or_key} | DEEPSEEK_API_KEY: {ds_key}",
-        f"FIREBASE: {fb_key}",
-        f"LLM actif: {a.llm.llm_actif}",
-        f"Erreurs: Groq={a.llm.derniere_erreur_groq or 'ok'} | Gemini={a.llm.derniere_erreur_gemini or 'ok'} | OpenRouter={a.llm.derniere_erreur_openrouter or 'ok'} | DeepSeek={a.llm.derniere_erreur_deepseek or 'ok'}",
-        f"Historique: {len(a.llm.historique)} msgs | Memoire: {len(a.memory.court_terme)} msgs",
-    ]
+    lignes = ["**Diagnostic MimoBot**"]
+    for var in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "HF_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "GITHUB_TOKEN", "FIREBASE_PRIVATE_KEY"]:
+        lignes.append(f"{var}: {'✅' if os.getenv(var) else '❌'}")
+    erreurs = [f"{n}={getattr(a.llm, f'derniere_erreur_{n}', 'ok')}" for n in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]]
+    lignes.append(f"LLM actif: {a.llm.llm_actif}")
+    lignes.append(f"Erreurs: {' | '.join(erreurs)}")
+    lignes.append(f"Historique: {len(a.llm.historique)} msgs | Memoire: {len(a.memory.court_terme)} msgs")
     await update.message.reply_text("\n".join(lignes))
 
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,16 +65,17 @@ async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     test_msg = [{"role": "user", "content": "reponds 'ok' en 1 mot"}]
     resultats = []
     for nom, methode in [("Groq", a.llm._appeler_groq), ("Gemini", a.llm._appeler_gemini),
-                          ("OpenRouter", a.llm._appeler_openrouter), ("DeepSeek", a.llm._appeler_deepseek)]:
+                          ("OpenRouter", a.llm._appeler_openrouter), ("HuggingFace", a.llm._appeler_huggingface),
+                          ("Cloudflare", a.llm._appeler_cloudflare), ("GitHub", a.llm._appeler_github)]:
         try:
             r = methode(test_msg)
             if r:
                 resultats.append(f"✅ {nom}: {r[:50]}")
             else:
                 erreur = getattr(a.llm, f"derniere_erreur_{nom.lower()}", "inconnue")
-                resultats.append(f"❌ {nom}: {erreur[:80]}")
+                resultats.append(f"❌ {nom}: {erreur[:100]}")
         except Exception as e:
-            resultats.append(f"❌ {nom}: {type(e).__name__}: {str(e)[:80]}")
+            resultats.append(f"❌ {nom}: {type(e).__name__}: {str(e)[:100]}")
     await msg.edit_text("\n".join(resultats))
 
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -144,7 +138,8 @@ def lancer_bot():
     if not token:
         log.error("TELEGRAM_TOKEN manquant")
         return
-    log.info(f"GROQ: {bool(os.getenv('GROQ_API_KEY'))} | GEMINI: {bool(os.getenv('GEMINI_API_KEY'))} | OPENROUTER: {bool(os.getenv('OPENROUTER_API_KEY'))} | DEEPSEEK: {bool(os.getenv('DEEPSEEK_API_KEY'))}")
+    for var in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "HF_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "GITHUB_TOKEN"]:
+        log.info(f"{var}: {bool(os.getenv(var))}")
     import httpx
     httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
     httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
