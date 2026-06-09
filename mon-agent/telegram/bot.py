@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import asyncio
 import logging
 import threading
@@ -133,13 +134,11 @@ def run_http():
     log.info(f"HTTP prêt sur le port {port}")
     serveur.serve_forever()
 
-def main():
-    t = threading.Thread(target=run_http, daemon=True)
-    t.start()
+def lancer_bot():
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         log.error("TELEGRAM_TOKEN manquant dans .env")
-        return
+        return False
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -150,6 +149,18 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message))
     log.info("MimoBot demarre...")
     app.run_polling()
+    return True
+
+def main():
+    t = threading.Thread(target=run_http, daemon=True)
+    t.start()
+    while True:
+        try:
+            lancer_bot()
+        except Exception as e:
+            log.error(f"Bot crashed: {e}")
+        log.info("Redemarrage du bot dans 5 secondes...")
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
