@@ -50,8 +50,8 @@ class MemoryManager:
         })
         if len(self.court_terme) > self.court_terme_max:
             self._compresser_court_terme()
-        if self.db and role == "assistant":
-            self._sauvegarder_firebase(contenu, user_id)
+        if self.db:
+            self._sauvegarder_firebase(role, contenu, user_id)
 
     def _compresser_court_terme(self):
         if len(self.court_terme) < 3:
@@ -67,13 +67,14 @@ class MemoryManager:
             sujets.append(c)
         return f"Resume session: {' | '.join(sujets[-5:])}"
 
-    def _sauvegarder_firebase(self, contenu, user_id):
+    def _sauvegarder_firebase(self, role, contenu, user_id):
         try:
             maintenant = datetime.now()
             session_id = maintenant.strftime("%Y-%m-%d")
             doc_ref = self.db.collection("conversations").document(user_id).collection("sessions").document(session_id)
             doc_ref.set({
                 "messages": firestore.ArrayUnion([{
+                    "role": role,
                     "contenu": contenu[:500],
                     "timestamp": maintenant.isoformat()
                 }]),
@@ -81,6 +82,26 @@ class MemoryManager:
             }, merge=True)
         except Exception as e:
             log.warning(f"Erreur sauvegarde Firebase: {e}")
+
+    def charger_conversations_recentes(self, user_id="default", limit=20):
+        if not self.db:
+            return []
+        try:
+            sessions = self.db.collection("conversations").document(user_id).collection("sessions") \
+                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(3).get()
+            messages = []
+            for session in sessions:
+                data = session.to_dict()
+                if "messages" in data:
+                    for msg in data["messages"]:
+                        messages.append({
+                            "role": msg.get("role", "assistant"),
+                            "content": msg.get("contenu", "")
+                        })
+            return messages[-limit:]
+        except Exception as e:
+            log.warning(f"Erreur chargement historique: {e}")
+            return []
 
     def get_contexte(self, user_id="default"):
         contexte = []
