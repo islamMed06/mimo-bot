@@ -38,11 +38,14 @@ class LLMManager:
 
     def get_system_prompt(self, user_message=None):
         maintenant = maintenant_algerie()
-        aujourdhui = maintenant.strftime("%A %d %B %Y")
-        jours_semaine_fr = {"Monday": "lundi", "Tuesday": "mardi", "Wednesday": "mercredi", "Thursday": "jeudi", "Friday": "vendredi", "Saturday": "samedi", "Sunday": "dimanche"}
-        mois_fr = {"January": "janvier", "February": "février", "March": "mars", "April": "avril", "May": "mai", "June": "juin", "July": "juillet", "August": "août", "September": "septembre", "October": "octobre", "November": "novembre", "December": "décembre"}
-        jour, mois, reste = aujourdhui.split(" ", 2)
-        aujourdhui_fr = f"{jours_semaine_fr.get(jour, jour)} {mois_fr.get(mois, mois)} {reste}"
+        jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+        mois_fr = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+        jours_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        mois_en = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        jour_idx = maintenant.weekday()
+        mois_idx = maintenant.month - 1
+        aujourdhui_fr = f"{jours_fr[jour_idx]} {maintenant.day} {mois_fr[mois_idx]} {maintenant.year}"
+        aujourdhui_en = f"{jours_en[jour_idx]} {maintenant.day} {mois_en[mois_idx]} {maintenant.year}"
         heure = maintenant.strftime("%H:%M")
         langue = "fr"
         if user_message:
@@ -50,6 +53,7 @@ class LLMManager:
         base_fr = (
             f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
             f"Nous sommes le {aujourdhui_fr} et il est {heure}. "
+            f"QUAND ON TE DEMANDE L'HEURE ou LA DATE, reponds avec ces informations ci-dessus. "
             f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
             f"Tu utilises Groq, Gemini, OpenRouter, HuggingFace, Cloudflare ou GitHub Models comme LLM (fallback automatique). "
             f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
@@ -59,7 +63,8 @@ class LLMManager:
         )
         base_en = (
             f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
-            f"Today is {aujourdhui} and the time is {heure}. "
+            f"Today is {aujourdhui_en} and the time is {heure}. "
+            f"WHEN ASKED FOR THE TIME or DATE, answer with the information above. "
             f"Always reply in the user's language. Be concise, clear, and helpful. "
             f"You use Groq, Gemini, OpenRouter, HuggingFace, Cloudflare or GitHub Models as LLM (auto fallback). "
             f"You have tools for calendar management, emails, student grades, lesson plans, "
