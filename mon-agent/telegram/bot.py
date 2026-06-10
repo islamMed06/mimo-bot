@@ -13,6 +13,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 log = logging.getLogger("BOT")
 
 agent = None
+START_TIME = time.time()
+LAST_POLL_START = 0
+POLL_COUNT = 0
 LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
@@ -26,7 +29,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Bonjour ! Je suis {nom}.\nUtilise /help pour les commandes.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/memoire - Profil")
+    await update.message.reply_text("/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/uptime - Temps actif\n/diagnostic - Diagnostique\n/test_llm - Test LLM\n/memoire - Profil")
 
 async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
@@ -39,7 +42,9 @@ async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
     llm = LLM_INDICATEURS.get(a.llm.llm_actif, a.llm.llm_actif)
-    await update.message.reply_text(f"**{a.config['agent']['nom']}**\nVersion: {a.config['agent']['version']}\nLLM: {llm}\nMemoire: {len(a.memory.court_terme)} messages\nOutils: {len(a.outils)}")
+    upt = int(time.time() - START_TIME)
+    h, r = divmod(upt, 3600); m, s = divmod(r, 60)
+    await update.message.reply_text(f"**{a.config['agent']['nom']}** v{a.config['agent']['version']}\nLLM: {llm}\nUptime: {h}h{m:02d}m\nRedemarrages: {POLL_COUNT}\nMemoire: {len(a.memory.court_terme)} msgs\nOutils: {len(a.outils)}")
 
 async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import os
@@ -77,6 +82,15 @@ async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             resultats.append(f"❌ {nom}: {type(e).__name__}: {str(e)[:100]}")
     await msg.edit_text("\n".join(resultats))
+
+async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    upt = int(time.time() - START_TIME)
+    h, r = divmod(upt, 3600); m, s = divmod(r, 60)
+    d, h2 = divmod(h, 24)
+    if d:
+        await update.message.reply_text(f"Actif depuis {d}j {h2}h{m:02d}m{s:02d}s")
+    else:
+        await update.message.reply_text(f"Actif depuis {h}h{m:02d}m{s:02d}s")
 
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package = " ".join(context.args) if context.args else ""
@@ -124,16 +138,21 @@ class SanteHandler(BaseHTTPRequestHandler):
 def keepalive():
     import httpx
     while True:
-        time.sleep(300)
+        time.sleep(120)
         try:
-            httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
-            log.info("Keepalive OK")
+            r = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+            if r.status_code == 200:
+                log.info("Keepalive OK")
+            else:
+                log.warning(f"Keepalive HTTP {r.status_code}")
         except Exception as e:
             log.warning(f"Keepalive: {e}")
 
 def lancer_bot():
-    global agent
+    global agent, POLL_COUNT, LAST_POLL_START
     agent = None
+    POLL_COUNT += 1
+    LAST_POLL_START = time.time()
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         log.error("TELEGRAM_TOKEN manquant")
@@ -145,11 +164,13 @@ def lancer_bot():
     httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
     time.sleep(2)
     app = Application.builder().token(token).build()
-    for h in [CommandHandler("start", start), CommandHandler("help", help_command),
-              CommandHandler("outils", outils), CommandHandler("status", status),
-              CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
-              CommandHandler("memoire", memoire), CommandHandler("installer", installer),
-              MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]:
+    handlers = [CommandHandler("start", start), CommandHandler("help", help_command),
+                CommandHandler("outils", outils), CommandHandler("status", status),
+                CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
+                CommandHandler("uptime", uptime),
+                CommandHandler("memoire", memoire), CommandHandler("installer", installer),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
+    for h in handlers:
         app.add_handler(h)
     log.info("MimoBot demarre...")
     a_test = get_agent()
@@ -161,8 +182,8 @@ def lancer_bot():
         log.error(f"Groq test exception: {e}")
     try:
         app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
-    except Exception:
-        pass
+    except Exception as e:
+        log.error(f"Polling arrete: {type(e).__name__}: {e}")
 
 def main():
     port = int(os.environ.get("PORT", 10000))
