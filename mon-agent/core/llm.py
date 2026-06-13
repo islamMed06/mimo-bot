@@ -74,7 +74,7 @@ class LLMManager:
         )
         return base_en if langue == "en" else base_fr
 
-    def _resumer_anciens(self):
+    def _resumer_anciens(self, user_id=None):
         anciens = self.historique[:-self.config["memoire"]["court_terme_max_messages"]]
         if len(anciens) > 5:
             texte = "\n".join([f"{m['role']}: {m['content'][:200]}" for m in anciens])
@@ -93,11 +93,28 @@ class LLMManager:
                 log.info(f"Anciens messages resumes automatiquement ({len(anciens)} msgs -> resume)")
             except Exception as e:
                 log.warning(f"Erreur resume: {e}")
+            # Extraire et sauvegarder l'identite utilisateur separement
+            if self.memory and user_id:
+                try:
+                    comp = self.groq_client.chat.completions.create(
+                        model=self.config["llm"]["modele_groq"],
+                        messages=[{"role": "system", "content": "Extrais les infos personnelles de l'utilisateur (nom, profession, role, preferences). Reponds en 1 phrase max. Si aucune info, reponds 'RIEN'."},
+                                  {"role": "user", "content": texte[:2000]}],
+                        max_tokens=100
+                    )
+                    identite = comp.choices[0].message.content.strip()
+                    if identite and identite != "RIEN":
+                        profil = self.memory.charger_profil(user_id)
+                        profil["identite"] = identite
+                        self.memory.sauvegarder_profil(profil, user_id)
+                        log.info(f"Identite utilisateur sauvegardee: {identite[:60]}")
+                except Exception as e:
+                    log.warning(f"Erreur extraction identite: {e}")
 
-    def repondre(self, user_message):
+    def repondre(self, user_message, user_id=None):
         self.historique.append({"role": "user", "content": user_message})
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
-            self._resumer_anciens()
+            self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
         messages = [{"role": "system", "content": system_prompt}]
         limite = self.config["memoire"]["court_terme_max_messages"]

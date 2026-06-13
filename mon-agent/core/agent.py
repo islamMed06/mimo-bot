@@ -93,20 +93,24 @@ class Agent:
                         return resultat, intention
                 except Exception as e:
                     log.warning(f"Erreur outil {intention}: {e}")
-        reponse, llm_utilise = self.llm.repondre(texte)
+        reponse, llm_utilise = self.llm.repondre(texte, user_id)
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
 
     def _restaurer_contexte(self, user_id):
+        profil = self.memory.charger_profil(user_id)
+        identite = profil.get("identite")
+        if identite:
+            self.llm.historique.append({"role": "system", "content": f"[Profil utilisateur] {identite}"})
         resume = self.memory.charger_resume(user_id)
         if resume:
             self.llm.historique.append({"role": "system", "content": f"[Resume conversation precedente] {resume}"})
         messages = self.memory.charger_conversations_recentes(user_id)
         for m in messages:
             self.llm.historique.append({"role": m["role"], "content": m["content"]})
-        if messages or resume:
-            log.info(f"Contexte restaure: {len(messages)} messages + resume pour {user_id}")
+        if messages or resume or identite:
+            log.info(f"Contexte restaure: {len(messages)} msgs + resume {'+ identite ' if identite else ' '}pour {user_id}")
         seuil = self.config["memoire"]["court_terme_max_messages"]
         if len(self.llm.historique) > seuil * 2:
             log.info("Proactive summarization before first user message")
-            self.llm._resumer_anciens()
+            self.llm._resumer_anciens(user_id)
