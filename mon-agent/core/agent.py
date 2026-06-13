@@ -104,6 +104,7 @@ class Agent:
         return reponse, llm_utilise
 
     def _restaurer_contexte(self, user_id):
+        import re
         profil = self.memory.charger_profil(user_id)
         identite = profil.get("identite")
         if identite:
@@ -112,8 +113,18 @@ class Agent:
         if resume:
             self.llm.historique.append({"role": "system", "content": f"[Resume conversation precedente] {resume}"})
         messages = self.memory.charger_conversations_recentes(user_id)
+        dates_anciennes = set()
         for m in messages:
-            self.llm.historique.append({"role": m["role"], "content": m["content"]})
+            # Nettoyer le prefixe date du contenu et le remplacer par une note system
+            contenu = m["content"]
+            match = re.match(r'^\[(\d{4}-\d{2}-\d{2})\]\s*', contenu)
+            if match:
+                dates_anciennes.add(match.group(1))
+                contenu = contenu[match.end():]
+            self.llm.historique.append({"role": m["role"], "content": contenu})
+        if dates_anciennes:
+            dates_txt = ", ".join(sorted(dates_anciennes))
+            self.llm.historique.insert(0, {"role": "system", "content": f"[Dates] Messages du {dates_txt} viennent de sessions precedentes."})
         if messages or resume or identite:
             log.info(f"Contexte restaure: {len(messages)} msgs + resume {'+ identite ' if identite else ' '}pour {user_id}")
         seuil = self.config["memoire"]["court_terme_max_messages"]
