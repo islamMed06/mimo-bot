@@ -4,7 +4,7 @@ import logging
 log = logging.getLogger("ROUTER")
 
 MOTS_CLEFS = {
-    "calendrier": ["calendrier", "agenda", "evenement", "rendez-vous", "rappel", "semaine", "mois", "planning", "schedule", "calendar", "event", "reminder"],
+    "calendrier": ["calendrier", "agenda", "evenement", "rendez-vous", "semaine", "mois", "planning", "schedule", "calendar", "event", "reminder"],
     "email": ["email", "mail", "courriel", "boite mail", "boîte mail", "boite reception", "boîte réception", "envoyer email", "envoyer mail", "lire email", "lire mail", "lire mes emails", "lire mes mails"],
     "correction": ["corrige", "correction", "corriger", "feuille", "exercice", "devoir", "correction", "correct", "exercise"],
     "notes": ["note", "eleve", "moyenne", "classe", "note", "student", "grade", "average"],
