@@ -81,16 +81,16 @@ class LLMManager:
             try:
                 completion = self.groq_client.chat.completions.create(
                     model=self.config["llm"]["modele_groq"],
-                    messages=[{"role": "system", "content": "Resume cette conversation en 2-3 phrases, en francais."},
+                    messages=[{"role": "system", "content": "Resume cette conversation en 2-3 phrases en francais. PRESERVE les infos sur l'utilisateur (nom, profession, preferences, role)."},
                               {"role": "user", "content": texte}],
-                    max_tokens=200
+                    max_tokens=300
                 )
                 resume = completion.choices[0].message.content
                 if self.memory:
                     self.memory.sauvegarder_resume(resume)
                 self.historique = self.historique[-self.config["memoire"]["court_terme_max_messages"]:]
                 self.historique.insert(0, {"role": "system", "content": f"[Resume conversation precedente] {resume}"})
-                log.info("Anciens messages resumes automatiquement")
+                log.info(f"Anciens messages resumes automatiquement ({len(anciens)} msgs -> resume)")
             except Exception as e:
                 log.warning(f"Erreur resume: {e}")
 
