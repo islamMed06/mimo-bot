@@ -9,16 +9,19 @@ log = logging.getLogger("MONITOR")
 
 HEARTBEAT_FILE = os.path.join(os.path.dirname(__file__), "..", "heartbeat.txt")
 BOT_SCRIPT = os.path.join(os.path.dirname(__file__), "bot.py")
+BOT_PROCESS = [None]
 
 def start_bot():
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     log.info("Demarrage du sous-processus bot...")
-    return subprocess.Popen(
+    p = subprocess.Popen(
         [sys.executable, "-u", BOT_SCRIPT],
         env=env,
         cwd=os.path.dirname(BOT_SCRIPT)
     )
+    BOT_PROCESS[0] = p
+    return p
 
 def surveiller():
     import httpx
@@ -53,8 +56,18 @@ def surveiller():
             bot = start_bot()
 
 if __name__ == "__main__":
+    import signal
+    def arreter(signum, frame):
+        log.info("SIGTERM recu, arret du bot...")
+        if BOT_PROCESS[0] and BOT_PROCESS[0].poll() is None:
+            BOT_PROCESS[0].terminate()
+            BOT_PROCESS[0].wait(5)
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, arreter)
     log.info("Moniteur demarre...")
     try:
         surveiller()
     except KeyboardInterrupt:
         log.info("Arret demande")
+        if BOT_PROCESS[0] and BOT_PROCESS[0].poll() is None:
+            BOT_PROCESS[0].terminate()

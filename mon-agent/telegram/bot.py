@@ -169,8 +169,17 @@ def lancer_bot():
         log.error("TELEGRAM_TOKEN manquant")
         return
     import httpx
+    # Clean up any stale polling sessions before starting
+    for t in range(3):
+        try:
+            r = httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
+            if r.status_code == 200:
+                log.info(f"Session fermee (tentative {t+1})")
+                break
+            time.sleep(3)
+        except Exception:
+            time.sleep(3)
     httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
-    httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
     time.sleep(2)
     app = Application.builder().token(token).build()
     handlers = [CommandHandler("start", start), CommandHandler("help", help_command),
@@ -182,10 +191,20 @@ def lancer_bot():
     for h in handlers:
         app.add_handler(h)
     log.info("MimoBot demarre...")
-    try:
-        app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
-    except Exception as e:
-        log.error(f"Polling arrete: {type(e).__name__}: {e}")
+    for t in range(4):
+        try:
+            app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
+            break
+        except Exception as e:
+            err_str = f"{type(e).__name__}: {e}"
+            log.error(f"Polling arrete: {err_str}")
+            if "Conflict" in str(e) and t < 3:
+                duree = 5 * (t + 1)
+                log.info(f"Conflit detecte, retente dans {duree}s (tentative {t+1}/3)...")
+                httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
+                time.sleep(duree)
+            else:
+                break
 
 def main():
     port = int(os.environ.get("PORT", 10000))
