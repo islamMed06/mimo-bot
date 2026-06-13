@@ -1,4 +1,4 @@
-import os, sys, time, subprocess, logging, threading
+import os, sys, time, subprocess, logging, threading, gc
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dotenv import load_dotenv
@@ -28,14 +28,13 @@ def surveiller():
     bot = None
     token = os.getenv("TELEGRAM_TOKEN")
     while True:
-        time.sleep(15)
+        time.sleep(30)
         if token:
             try:
-                r = httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
-                if r.status_code == 200:
-                    log.info("Keepalive OK")
-            except Exception as e:
-                log.warning(f"Keepalive: {e}")
+                httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
+            except Exception:
+                pass
+            gc.collect()
         if bot and bot.poll() is not None:
             log.warning(f"Bot termine (code {bot.returncode}), redemarrage...")
             bot = start_bot()

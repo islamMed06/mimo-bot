@@ -54,7 +54,7 @@
       "external": {}
     },
   "memoire": {
-    "court_terme_max_messages": 30,
+    "court_terme_max_messages": 20,
     "moyen_terme_jours": 30,
     "long_terme_actif": true,
     "auto_resume": true,

@@ -1,4 +1,4 @@
-import os, sys, time, logging, threading
+import os, sys, time, logging, threading, gc
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -154,13 +154,12 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def keepalive():
     import httpx
     while True:
-        time.sleep(60)
+        time.sleep(120)
         try:
             r = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
-            if r.status_code == 200:
-                log.info("Keepalive OK")
-        except Exception as e:
-            log.warning(f"Keepalive: {e}")
+        except Exception:
+            pass
+        gc.collect()
 
 class SanteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
