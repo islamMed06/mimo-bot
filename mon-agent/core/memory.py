@@ -141,6 +141,16 @@ class MemoryManager:
             contexte.append(f"{m['role']}: {m['contenu']}")
         return "\n".join(contexte)
 
+    def compter_sessions(self, user_id="default"):
+        if not self.db:
+            return 0
+        try:
+            sessions = list(self.db.collection("conversations").document(user_id).collection("sessions").get())
+            return len(sessions)
+        except Exception as e:
+            log.warning(f"Erreur comptage sessions: {e}")
+            return -1
+
     def charger_profil(self, user_id="default"):
         if not self.db:
             return self._profil_par_defaut()
