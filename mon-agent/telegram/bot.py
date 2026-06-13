@@ -1,7 +1,10 @@
 import os, sys, time, logging, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from core.agent import Agent
@@ -133,6 +136,24 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.error(f"Erreur: {e}")
         await update.message.reply_text("Desole, une erreur s'est produite.")
 
+def keepalive():
+    import httpx
+    while True:
+        time.sleep(60)
+        try:
+            r = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+            if r.status_code == 200:
+                log.info("Keepalive OK")
+        except Exception as e:
+            log.warning(f"Keepalive: {e}")
+
+class SanteHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+    def log_message(self, *a): pass
+
 def lancer_bot():
     global agent, POLL_COUNT
     agent = None
@@ -160,7 +181,22 @@ def lancer_bot():
     except Exception as e:
         log.error(f"Polling arrete: {type(e).__name__}: {e}")
 
-if __name__ == "__main__":
+def main():
+    port = int(os.environ.get("PORT", 10000))
+    t_http = threading.Thread(target=HTTPServer(("0.0.0.0", port), SanteHandler).serve_forever, daemon=True)
+    t_http.start()
+    t_keep = threading.Thread(target=keepalive, daemon=True)
+    t_keep.start()
     t_heart = threading.Thread(target=heartbeat, daemon=True)
     t_heart.start()
-    lancer_bot()
+    time.sleep(2)
+    while True:
+        try:
+            lancer_bot()
+        except Exception as e:
+            log.error(f"Bot error: {e}")
+        log.info("Redemarrage dans 5s...")
+        time.sleep(5)
+
+if __name__ == "__main__":
+    main()
