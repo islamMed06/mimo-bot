@@ -96,7 +96,7 @@ class LLMManager:
 
     def repondre(self, user_message):
         self.historique.append({"role": "user", "content": user_message})
-        if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 1.5:
+        if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens()
         system_prompt = self.get_system_prompt(user_message)
         messages = [{"role": "system", "content": system_prompt}]

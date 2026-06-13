@@ -107,6 +107,6 @@ class Agent:
         if messages or resume:
             log.info(f"Contexte restaure: {len(messages)} messages + resume pour {user_id}")
         seuil = self.config["memoire"]["court_terme_max_messages"]
-        if len(self.llm.historique) > seuil * 1.5:
+        if len(self.llm.historique) > seuil * 2:
             log.info("Proactive summarization before first user message")
             self.llm._resumer_anciens()

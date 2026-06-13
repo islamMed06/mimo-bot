@@ -103,12 +103,12 @@ class MemoryManager:
         except Exception as e:
             log.warning(f"Erreur sauvegarde Firebase: {e}")
 
-    def charger_conversations_recentes(self, user_id="default", limit=150):
+    def charger_conversations_recentes(self, user_id="default", limit=40):
         if not self.db:
             return []
         try:
             sessions = list(self.db.collection("conversations").document(user_id).collection("sessions") \
-                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(3).get())
+                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(2).get())
             messages = []
             for session in sessions:
                 data = session.to_dict()
