@@ -61,7 +61,7 @@ if __name__ == "__main__":
         log.info("SIGTERM recu, arret du bot...")
         if BOT_PROCESS[0] and BOT_PROCESS[0].poll() is None:
             BOT_PROCESS[0].terminate()
-            BOT_PROCESS[0].wait(5)
+            BOT_PROCESS[0].wait(10)
         sys.exit(0)
     signal.signal(signal.SIGTERM, arreter)
     log.info("Moniteur demarre...")

@@ -220,8 +220,8 @@ def main():
             lancer_bot()
         except Exception as e:
             log.error(f"Bot error: {e}")
-        log.info("Redemarrage dans 5s...")
-        time.sleep(5)
+        log.info("Arret bot (fin polling), sortie propre...")
+        break
 
 if __name__ == "__main__":
     main()
