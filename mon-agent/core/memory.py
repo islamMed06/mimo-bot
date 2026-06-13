@@ -107,17 +107,29 @@ class MemoryManager:
         if not self.db:
             return []
         try:
-            sessions = self.db.collection("conversations").document(user_id).collection("sessions") \
-                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(3).get()
+            sessions = list(self.db.collection("conversations").document(user_id).collection("sessions") \
+                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(3).get())
             messages = []
             for session in sessions:
                 data = session.to_dict()
                 if "messages" in data:
                     for msg in data["messages"]:
+                        ts = msg.get("timestamp", "")
+                        date_prefix = ""
+                        if ts:
+                            try:
+                                d = ts[:10]
+                                from datetime import date
+                                aujourdhui = date.today().isoformat()
+                                if d != aujourdhui:
+                                    date_prefix = f"[{d}] "
+                            except:
+                                pass
                         messages.append({
                             "role": msg.get("role", "assistant"),
-                            "content": msg.get("contenu", "")
+                            "content": date_prefix + msg.get("contenu", "")
                         })
+            log.info(f"Charge historique: {len(messages)} messages depuis {len(sessions)} sessions")
             return messages[-limit:]
         except Exception as e:
             log.warning(f"Erreur chargement historique: {e}")
