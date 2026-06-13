@@ -66,6 +66,9 @@ async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if a.memory.db:
         fb_test = a.memory.test_lecture_ecriture(user_id)
         lignes.append(f"Firebase test: {fb_test}")
+    # Restaurer le contexte si necessaire pour le diagnostic
+    if not a.llm.historique:
+        a._restaurer_contexte(user_id)
     h_len = len(a.llm.historique)
     sessions_fb = a.memory.compter_sessions(user_id) if a.memory.db else "N/A"
     lignes.append(f"User: {user_id} | Hist: {h_len} msgs | Sessions FB: {sessions_fb}")
