@@ -19,10 +19,16 @@ MOTS_CLEFS = {
     "conversation": ["mode libre", "mode chat", "chat mode", "conversation", "active le chat", "desactive le chat"]
 }
 
+EXCLUSIONS = {
+    "rappel": [r'\btu te rappelles?\b', r'\bvous (vous )?rappelles?\b', r'\bse rappelle\b', r'\bse souvenir\b', r'\bte souviens.tu\b', r'\ben rappelle\b']
+}
+
 def detecter_intention(texte):
     texte_lower = texte.lower()
     scores = {}
     for intention, mots in MOTS_CLEFS.items():
+        if intention in EXCLUSIONS and any(re.search(p, texte_lower) for p in EXCLUSIONS[intention]):
+            continue
         score = 0
         for mot in mots:
             if mot in texte_lower:
