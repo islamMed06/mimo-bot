@@ -57,19 +57,25 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
+    user_id = str(update.effective_user.id)
     lignes = ["**Diagnostic MimoBot**"]
     for var in ["GROQ_API_KEY", "GEMINI_API_KEY", "OPENROUTER_API_KEY", "HF_API_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "GITHUB_TOKEN", "FIREBASE_PRIVATE_KEY"]:
         lignes.append(f"{var}: {'✅' if os.getenv(var) else '❌'}")
     fb_status = "✅ connecte" if a.memory.db is not None else "❌ NON connecte"
     lignes.append(f"Firebase DB: {fb_status}")
     h_len = len(a.llm.historique)
-    sessions_fb = a.memory.compter_sessions("default") if a.memory.db else "N/A"
-    lignes.append(f"Historique LLM: {h_len} msgs | Sessions FB: {sessions_fb}")
+    sessions_fb = a.memory.compter_sessions(user_id) if a.memory.db else "N/A"
+    lignes.append(f"User: {user_id} | Hist: {h_len} msgs | Sessions FB: {sessions_fb}")
     erreurs = [f"{n}={getattr(a.llm, f'derniere_erreur_{n}', 'ok')}" for n in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]]
     lignes.append(f"LLM actif: {a.llm.llm_actif}")
     lignes.append(f"Erreurs: {' | '.join(erreurs)}")
     if h_len > 0:
-        lignes.append(f"Dernier msg restore: {a.llm.historique[-1].get('content', '')[:100]}")
+        lignes.append(f"Dernier msg hist: {a.llm.historique[-1].get('content', '')[:100]}")
+    # Verifier si le resume est dans l'historique
+    resumes = [m for m in a.llm.historique if m["role"] == "system" and "Resume" in m["content"]]
+    lignes.append(f"Resumes dans hist: {len(resumes)}")
+    for r in resumes:
+        lignes.append(f"  -> {r['content'][:120]}")
     await update.message.reply_text("\n".join(lignes))
 
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -98,10 +98,16 @@ class LLMManager:
         self.historique.append({"role": "user", "content": user_message})
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 1.5:
             self._resumer_anciens()
-        messages = [
-            {"role": "system", "content": self.get_system_prompt(user_message)}
-        ]
-        for msg in self.historique[-self.config["memoire"]["court_terme_max_messages"]:]:
+        system_prompt = self.get_system_prompt(user_message)
+        messages = [{"role": "system", "content": system_prompt}]
+        limite = self.config["memoire"]["court_terme_max_messages"]
+        # Inclure TOUS les messages system (resumes) en preservant l'ordre
+        for msg in self.historique:
+            if msg["role"] == "system":
+                messages.append(msg)
+        # Puis les messages user/assistant les plus recents
+        recents = [m for m in self.historique if m["role"] != "system"]
+        for msg in recents[-limite:]:
             messages.append(msg)
         fallbacks = [
             ("groq", self._appeler_groq),
