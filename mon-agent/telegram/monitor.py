@@ -58,10 +58,10 @@ def surveiller():
 if __name__ == "__main__":
     import signal
     def arreter(signum, frame):
-        log.info("SIGTERM recu, arret du bot...")
+        log.info("SIGTERM recu, kill bot...")
         if BOT_PROCESS[0] and BOT_PROCESS[0].poll() is None:
-            BOT_PROCESS[0].terminate()
-            BOT_PROCESS[0].wait(10)
+            BOT_PROCESS[0].kill()
+            BOT_PROCESS[0].wait(3)
         sys.exit(0)
     signal.signal(signal.SIGTERM, arreter)
     log.info("Moniteur demarre...")
@@ -70,4 +70,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log.info("Arret demande")
         if BOT_PROCESS[0] and BOT_PROCESS[0].poll() is None:
-            BOT_PROCESS[0].terminate()
+            BOT_PROCESS[0].kill()

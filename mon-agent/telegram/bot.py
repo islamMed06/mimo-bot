@@ -229,8 +229,8 @@ def main():
             lancer_bot()
         except Exception as e:
             log.error(f"Bot error: {e}")
-        log.info("Arret bot (fin polling), sortie propre...")
-        break
+        log.info("Bot redemarrage dans 5s...")
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
