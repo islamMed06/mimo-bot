@@ -1,4 +1,4 @@
-import os, sys, time, logging, threading, gc
+import os, sys, time, logging, threading, gc, atexit, signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -16,6 +16,17 @@ HEARTBEAT_FILE = os.path.join(os.path.dirname(__file__), "..", "heartbeat.txt")
 agent = None
 START_TIME = time.time()
 POLL_COUNT = 0
+_TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+def _fermer_session():
+    import httpx
+    if _TOKEN:
+        try:
+            httpx.post(f"https://api.telegram.org/bot{_TOKEN}/close", timeout=5)
+        except Exception:
+            pass
+
+atexit.register(_fermer_session)
 LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
