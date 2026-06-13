@@ -195,12 +195,13 @@ def lancer_bot():
     for t in range(3):
         try:
             r = httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
-            if r.status_code == 200:
-                log.info(f"Session fermee (tentative {t+1})")
+            if r.status_code in (200, 429):
+                if r.status_code == 200:
+                    log.info(f"Session fermee (tentative {t+1})")
                 break
-            time.sleep(3)
+            time.sleep(2)
         except Exception:
-            time.sleep(3)
+            time.sleep(2)
     httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
     time.sleep(2)
     app = Application.builder().token(token).build()
