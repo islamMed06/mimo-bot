@@ -111,13 +111,15 @@ class LLMManager:
                 except Exception as e:
                     log.warning(f"Erreur extraction identite: {e}")
 
-    def _extraire_identite(self, user_id):
+    def _extraire_identite(self, user_id, messages=None):
         try:
-            texte = "\n".join([f"{m['role']}: {m['content'][:300]}" for m in self.historique[-20:]])
+            if not messages:
+                messages = self.historique[-40:]
+            texte = "\n".join([f"{m['role']}: {m['content'][:300]}" for m in messages])
             comp = self.groq_client.chat.completions.create(
                 model=self.config["llm"]["modele_groq"],
                 messages=[{"role": "system", "content": "Extrais les infos personnelles de l'utilisateur (nom, profession, role, preferences). Reponds en 1 phrase max. Si aucune info, reponds 'RIEN'."},
-                          {"role": "user", "content": texte[:2000]}],
+                          {"role": "user", "content": texte[:3000]}],
                 max_tokens=100
             )
             identite = comp.choices[0].message.content.strip()
@@ -125,10 +127,11 @@ class LLMManager:
                 profil = self.memory.charger_profil(user_id)
                 profil["identite"] = identite
                 self.memory.sauvegarder_profil(profil, user_id)
-                self.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {identite}"})
                 log.info(f"Identite extraite: {identite[:60]}")
+                return identite
         except Exception as e:
             log.warning(f"Erreur extraction identite: {e}")
+        return None
 
     def repondre(self, user_message, user_id=None):
         self.historique.append({"role": "user", "content": user_message})

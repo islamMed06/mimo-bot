@@ -122,6 +122,11 @@ class Agent:
                 dates_anciennes.add(match.group(1))
                 contenu = contenu[match.end():]
             self.llm.historique.append({"role": m["role"], "content": contenu})
+        # Extraire l'identite AVANT resumation (messages non filtres)
+        if not identite and messages:
+            extraites = self.llm._extraire_identite(user_id, messages)
+            if extraites:
+                self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {extraites}"})
         if dates_anciennes:
             dates_txt = ", ".join(sorted(dates_anciennes))
             self.llm.historique.insert(0, {"role": "system", "content": f"[Dates] Messages du {dates_txt} viennent de sessions precedentes."})
@@ -131,6 +136,3 @@ class Agent:
         if len(self.llm.historique) > seuil * 2:
             log.info("Proactive summarization before first user message")
             self.llm._resumer_anciens(user_id)
-        # Extraire l'identite si absente du profil
-        if not identite and messages:
-            self.llm._extraire_identite(user_id)
