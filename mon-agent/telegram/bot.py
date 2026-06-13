@@ -63,6 +63,9 @@ async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lignes.append(f"{var}: {'✅' if os.getenv(var) else '❌'}")
     fb_status = "✅ connecte" if a.memory.db is not None else "❌ NON connecte"
     lignes.append(f"Firebase DB: {fb_status}")
+    if a.memory.db:
+        fb_test = a.memory.test_lecture_ecriture(user_id)
+        lignes.append(f"Firebase test: {fb_test}")
     h_len = len(a.llm.historique)
     sessions_fb = a.memory.compter_sessions(user_id) if a.memory.db else "N/A"
     lignes.append(f"User: {user_id} | Hist: {h_len} msgs | Sessions FB: {sessions_fb}")

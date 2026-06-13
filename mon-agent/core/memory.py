@@ -151,6 +151,20 @@ class MemoryManager:
             log.warning(f"Erreur comptage sessions: {e}")
             return -1
 
+    def test_lecture_ecriture(self, user_id="default"):
+        if not self.db:
+            return "Firebase DB non initialise"
+        try:
+            from datetime import datetime
+            ref = self.db.collection("_tests").document(user_id)
+            ref.set({"test": "ok", "ts": datetime.now().isoformat()}, merge=True)
+            doc = ref.get()
+            if doc.exists:
+                return f"Ecriture/Lecture OK -> {doc.to_dict().get('test')}"
+            return "Document non trouve apres ecriture"
+        except Exception as e:
+            return f"Erreur test Firebase: {e}"
+
     def charger_profil(self, user_id="default"):
         if not self.db:
             return self._profil_par_defaut()
