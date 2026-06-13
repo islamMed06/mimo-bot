@@ -77,6 +77,12 @@ class Agent:
         from core.router import detecter_intention, executer_intention
         if not self.llm.historique:
             self._restaurer_contexte(user_id)
+        else:
+            profil = self.memory.charger_profil(user_id)
+            identite = profil.get("identite")
+            if identite and not any(m["role"] == "system" and "[Profil utilisateur]" in m["content"] for m in self.llm.historique):
+                self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {identite}"})
+                log.info(f"Profil utilisateur injecte dans historique existant")
         self.memory.ajouter_message("user", texte, user_id)
         intention = detecter_intention(texte)
         log.info(f"Intention detectee: {intention}")
