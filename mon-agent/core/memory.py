@@ -1,10 +1,11 @@
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+ALGERIA_TZ = timezone(timedelta(hours=1))
 log = logging.getLogger("MEMORY")
 
 class MemoryManager:
@@ -42,7 +43,7 @@ class MemoryManager:
             log.warning(f"Erreur initialisation Firebase: {e}")
 
     def ajouter_message(self, role, contenu, user_id="default"):
-        maintenant = datetime.now()
+        maintenant = datetime.now(ALGERIA_TZ)
         self.court_terme.append({
             "role": role,
             "contenu": contenu,
@@ -58,7 +59,7 @@ class MemoryManager:
             return
         resume = self._generer_resume(self.court_terme[:-5])
         self.court_terme = self.court_terme[-5:]
-        self.court_terme.insert(0, {"role": "resume", "contenu": resume, "timestamp": datetime.now().isoformat()})
+        self.court_terme.insert(0, {"role": "resume", "contenu": resume, "timestamp": datetime.now(ALGERIA_TZ).isoformat()})
 
     def _generer_resume(self, messages):
         sujets = []
@@ -72,7 +73,7 @@ class MemoryManager:
             return
         try:
             ref = self.db.collection("conversations").document(user_id).collection("resumes").document("dernier")
-            ref.set({"resume": resume, "timestamp": datetime.now().isoformat()})
+            ref.set({"resume": resume, "timestamp": datetime.now(ALGERIA_TZ).isoformat()})
         except Exception as e:
             log.warning(f"Erreur sauvegarde resume: {e}")
 
@@ -89,7 +90,7 @@ class MemoryManager:
 
     def _sauvegarder_firebase(self, role, contenu, user_id):
         try:
-            maintenant = datetime.now()
+            maintenant = datetime.now(ALGERIA_TZ)
             session_id = maintenant.strftime("%Y-%m-%d")
             doc_ref = self.db.collection("conversations").document(user_id).collection("sessions").document(session_id)
             doc_ref.set({
@@ -119,8 +120,7 @@ class MemoryManager:
                         if ts:
                             try:
                                 d = ts[:10]
-                                from datetime import date
-                                aujourdhui = date.today().isoformat()
+                                aujourdhui = datetime.now(ALGERIA_TZ).date().isoformat()
                                 if d != aujourdhui:
                                     date_prefix = f"[{d}] "
                             except:
@@ -157,7 +157,7 @@ class MemoryManager:
         try:
             from datetime import datetime
             ref = self.db.collection("_tests").document(user_id)
-            ref.set({"test": "ok", "ts": datetime.now().isoformat()}, merge=True)
+            ref.set({"test": "ok", "ts": datetime.now(ALGERIA_TZ).isoformat()}, merge=True)
             doc = ref.get()
             if doc.exists:
                 return f"Ecriture/Lecture OK -> {doc.to_dict().get('test')}"
