@@ -16,6 +16,7 @@ agent = None
 START_TIME = time.time()
 LAST_POLL_START = 0
 POLL_COUNT = 0
+DERNIER_ACTIVITE = time.time()
 LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
@@ -24,14 +25,21 @@ def get_agent():
         agent = Agent()
     return agent
 
+def marquer_activite():
+    global DERNIER_ACTIVITE
+    DERNIER_ACTIVITE = time.time()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     nom = get_agent().config["agent"]["nom"]
     await update.message.reply_text(f"Bonjour ! Je suis {nom}.\nUtilise /help pour les commandes.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     await update.message.reply_text("/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/uptime - Temps actif\n/diagnostic - Diagnostique\n/test_llm - Test LLM\n/memoire - Profil")
 
 async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     a = get_agent()
     lignes = ["**Outils actifs :**"]
     for nom in a.outils:
@@ -40,6 +48,7 @@ async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lignes))
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     a = get_agent()
     llm = LLM_INDICATEURS.get(a.llm.llm_actif, a.llm.llm_actif)
     upt = int(time.time() - START_TIME)
@@ -47,6 +56,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"**{a.config['agent']['nom']}** v{a.config['agent']['version']}\nLLM: {llm}\nUptime: {h}h{m:02d}m\nRedemarrages: {POLL_COUNT}\nMemoire: {len(a.memory.court_terme)} msgs\nOutils: {len(a.outils)}")
 
 async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     import os
     a = get_agent()
     lignes = ["**Diagnostic MimoBot**"]
@@ -59,12 +69,14 @@ async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("\n".join(lignes))
 
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     a = get_agent()
     profil = a.memory.charger_profil(str(update.effective_user.id))
     prefs = profil.get("preferences", {})
     await update.message.reply_text(f"**Profil**\nLangue: {prefs.get('langue', 'fr')}\nMessages session: {len(a.memory.court_terme)}")
 
 async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     a = get_agent()
     msg = await update.message.reply_text("Test de tous les LLM...")
     test_msg = [{"role": "user", "content": "reponds 'ok' en 1 mot"}]
@@ -84,6 +96,7 @@ async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.edit_text("\n".join(resultats))
 
 async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     upt = int(time.time() - START_TIME)
     h, r = divmod(upt, 3600); m, s = divmod(r, 60)
     d, h2 = divmod(h, 24)
@@ -93,6 +106,7 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Actif depuis {h}h{m:02d}m{s:02d}s")
 
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     package = " ".join(context.args) if context.args else ""
     if not package:
         await update.message.reply_text("Usage: /installer <nom_package>")
@@ -106,6 +120,7 @@ async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(resultat)
 
 async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    marquer_activite()
     if not update.message or not update.message.text:
         return
     user_id = str(update.effective_user.id)
@@ -138,7 +153,7 @@ class SanteHandler(BaseHTTPRequestHandler):
 def keepalive():
     import httpx
     while True:
-        time.sleep(120)
+        time.sleep(60)
         try:
             r = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
             if r.status_code == 200:
@@ -147,6 +162,10 @@ def keepalive():
                 log.warning(f"Keepalive HTTP {r.status_code}")
         except Exception as e:
             log.warning(f"Keepalive: {e}")
+        inactif = int(time.time() - DERNIER_ACTIVITE)
+        if inactif > 600:
+            log.warning(f"Aucun message depuis {inactif}s. Redemarrage force!")
+            os._exit(1)
 
 def lancer_bot():
     global agent, POLL_COUNT, LAST_POLL_START
