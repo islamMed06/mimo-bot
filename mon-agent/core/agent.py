@@ -114,3 +114,6 @@ class Agent:
         if len(self.llm.historique) > seuil * 2:
             log.info("Proactive summarization before first user message")
             self.llm._resumer_anciens(user_id)
+        # Extraire l'identite si absente du profil
+        if not identite and messages:
+            self.llm._extraire_identite(user_id)
