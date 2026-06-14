@@ -1,14 +1,21 @@
 import logging
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import io
 log = logging.getLogger("STATS")
 
 class StatsOutil:
     def __init__(self, config, memory):
         self.config = config
         self.memory = memory
+        self._plt = None
+
+    def _get_plt(self):
+        if self._plt is None:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import io as _io
+            self._plt = plt
+            self._io = _io
+        return self._plt, self._io
 
     async def executer(self, texte):
         texte_lower = texte.lower()
@@ -22,6 +29,7 @@ class StatsOutil:
 
     async def generer_graphique(self, donnees, titre="Notes de la classe"):
         try:
+            plt, io = self._get_plt()
             fig, ax = plt.subplots(figsize=(8, 5))
             eleves = list(donnees.keys())
             notes = list(donnees.values())

@@ -17,6 +17,7 @@ agent = None
 START_TIME = time.time()
 POLL_COUNT = 0
 _TOKEN = os.getenv("TELEGRAM_TOKEN")
+_STOP = False
 
 def _fermer_session():
     import httpx
@@ -27,6 +28,13 @@ def _fermer_session():
             pass
 
 atexit.register(_fermer_session)
+
+def _stopper(signum, frame):
+    global _STOP
+    _STOP = True
+    log.info("SIGTERM recu, sortie propre...")
+
+signal.signal(signal.SIGTERM, _stopper)
 LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
@@ -238,11 +246,14 @@ def main():
     t_heart = threading.Thread(target=heartbeat, daemon=True)
     t_heart.start()
     time.sleep(2)
-    while True:
+    global _STOP
+    while not _STOP:
         try:
             lancer_bot()
         except Exception as e:
             log.error(f"Bot error: {e}")
+        if _STOP:
+            break
         log.info("Bot redemarrage dans 5s...")
         time.sleep(5)
 
