@@ -175,10 +175,15 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def keepalive():
     import httpx
+    port = int(os.environ.get("PORT", 10000))
     while True:
         time.sleep(120)
         try:
-            r = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+            httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+        except Exception:
+            pass
+        try:
+            httpx.get(f"http://localhost:{port}", timeout=5)
         except Exception:
             pass
         gc.collect()
