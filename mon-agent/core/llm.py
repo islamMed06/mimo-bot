@@ -138,7 +138,9 @@ class LLMManager:
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
-        messages = [{"role": "system", "content": system_prompt}]
+        maintenant = maintenant_algerie()
+        date_verrou = f"[Date] AUJOURD_HUI = {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (UTC+1 Algerie). IGNORE les dates ou heures dans les messages precedents."
+        messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": date_verrou}]
         limite = self.config["memoire"]["court_terme_max_messages"]
         # Inclure TOUS les messages system (resumes) en preservant l'ordre
         for msg in self.historique:
