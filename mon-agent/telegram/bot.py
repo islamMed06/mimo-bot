@@ -177,25 +177,22 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def keepalive():
     import httpx
     port = int(os.environ.get("PORT", 10000))
-    while True:
-        time.sleep(120)
-        try:
-            httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
-        except Exception:
-            pass
-        try:
-            httpx.get(f"http://localhost:{port}", timeout=5)
-        except Exception:
-            pass
-        envoyer_rappels()
-        gc.collect()
-
-def check_rappels_rapide():
-    """Thread court toutes les 15s pour les rappels"""
-    log.info("Check rappels rapide demarre")
+    counter = 0
+    log.info("Keepalive demarre (verifie rappels toutes les 15s)")
     while True:
         time.sleep(15)
+        counter += 1
         envoyer_rappels()
+        if counter % 8 == 0:
+            try:
+                httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+            except Exception:
+                pass
+            try:
+                httpx.get(f"http://localhost:{port}", timeout=5)
+            except Exception:
+                pass
+            gc.collect()
 
 def envoyer_rappels():
     """Verifie et envoie les rappels echus (synchrone, appele par keepalive et message handler)"""
@@ -228,6 +225,7 @@ def envoyer_rappels():
 
 class SanteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        envoyer_rappels()
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"OK")
@@ -288,8 +286,6 @@ def main():
     t_keep.start()
     t_heart = threading.Thread(target=heartbeat, daemon=True)
     t_heart.start()
-    t_rapide = threading.Thread(target=check_rappels_rapide, daemon=True)
-    t_rapide.start()
     time.sleep(2)
     global _STOP
     while not _STOP:
