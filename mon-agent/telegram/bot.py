@@ -188,32 +188,21 @@ def keepalive():
             pass
         gc.collect()
 
-def verifier_rappels():
-    import httpx
-    token = os.getenv("TELEGRAM_TOKEN")
-    log.info("Scheduler rappels demarre")
-    while True:
-        try:
-            if not token:
-                log.warning("Scheduler: pas de token")
-                time.sleep(30)
-                continue
-            a = get_agent()
-            if not a.memory.db:
-                log.warning("Scheduler: a.memory.db est None")
-                time.sleep(30)
-                continue
-            echus = a.memory.rappels_echus()
-            if echus:
-                log.info(f"Scheduler: {len(echus)} rappel(s) a envoyer")
-            for r in echus:
-                msg = f"Rappel : {r['message']}"
-                resp = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": r["user_id"], "text": msg}, timeout=10)
-                log.info(f"Scheduler: envoi a {r['user_id']} -> {resp.status_code}")
+async def verifier_rappels_callback(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        a = get_agent()
+        if not a.memory.db:
+            return
+        echus = a.memory.rappels_echus()
+        for r in echus:
+            try:
+                await context.bot.send_message(chat_id=r["user_id"], text=f"Rappel : {r['message']}")
                 a.memory.marquer_envoye(r["user_id"], r["doc_id"])
-        except Exception as e:
-            log.warning(f"Scheduler rappels: {type(e).__name__}: {e}")
-        time.sleep(30)
+                log.info(f"Rappel envoye a {r['user_id']}: {r['message'][:40]}")
+            except Exception as e:
+                log.warning(f"Envoi rappel a {r['user_id']}: {e}")
+    except Exception as e:
+        log.warning(f"Scheduler rappels: {type(e).__name__}: {e}")
 
 class SanteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -253,6 +242,9 @@ def lancer_bot():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
     for h in handlers:
         app.add_handler(h)
+    if app.job_queue:
+        app.job_queue.run_repeating(verifier_rappels_callback, interval=30, first=10)
+        log.info("Scheduler rappels actif (JobQueue 30s)")
     log.info("MimoBot demarre...")
     for t in range(4):
         try:
@@ -277,8 +269,6 @@ def main():
     t_keep.start()
     t_heart = threading.Thread(target=heartbeat, daemon=True)
     t_heart.start()
-    t_rappel = threading.Thread(target=verifier_rappels, daemon=True)
-    t_rappel.start()
     time.sleep(2)
     global _STOP
     while not _STOP:
