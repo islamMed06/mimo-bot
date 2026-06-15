@@ -195,7 +195,6 @@ def keepalive():
             gc.collect()
 
 def envoyer_rappels():
-    """Verifie et envoie les rappels echus (synchrone, appele par keepalive et message handler)"""
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         return
@@ -206,7 +205,7 @@ def envoyer_rappels():
         echus = a.memory.rappels_echus()
         if not echus:
             return
-        log.info(f"Scheduler: {len(echus)} rappel(s) a envoyer")
+        log.info(f"Envoi de {len(echus)} rappel(s)")
         import httpx
         for r in echus:
             try:

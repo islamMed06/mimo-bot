@@ -198,8 +198,9 @@ class MemoryManager:
         try:
             from datetime import datetime
             doc_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
-            ref = self.db.collection("reminders").document(user_id).collection("items").document(doc_id)
-            ref.set({"message": message, "timestamp": timestamp_iso, "cree_le": datetime.now(ALGERIA_TZ).isoformat(), "envoye": False})
+            data = {"user_id": user_id, "message": message, "timestamp": timestamp_iso,
+                    "cree_le": datetime.now(ALGERIA_TZ).isoformat(), "envoye": False}
+            self.db.collection("reminders").document(doc_id).set(data)
             return doc_id
         except Exception as e:
             log.warning(f"Erreur ajout rappel: {e}")
@@ -209,8 +210,8 @@ class MemoryManager:
         if not self.db:
             return {}
         try:
-            ref = self.db.collection("reminders").document(user_id).collection("items")
-            docs = ref.where("envoye", "==", not actifs).stream() if not actifs else ref.stream()
+            filt = "envoye" if actifs else "user_id"
+            docs = self.db.collection("reminders").where("user_id", "==", user_id).stream()
             rappels = {}
             for d in docs:
                 data = d.to_dict()
@@ -227,27 +228,24 @@ class MemoryManager:
         if not self.db:
             return False
         try:
-            self.db.collection("reminders").document(user_id).collection("items").document(doc_id).delete()
+            self.db.collection("reminders").document(doc_id).delete()
             return True
         except Exception as e:
             log.warning(f"Erreur suppression rappel: {e}")
             return False
 
     def rappels_echus(self):
-        """Retourne tous les rappels (tous users) dont l'echeance est passee et non envoyes"""
         if not self.db:
             return []
         try:
             maintenant = datetime.now(ALGERIA_TZ).isoformat()
-            users = self.db.collection("reminders").stream()
+            docs = self.db.collection("reminders").where("envoye", "==", False).stream()
             echus = []
-            for user_doc in users:
-                user_id = user_doc.id
-                items = self.db.collection("reminders").document(user_id).collection("items").where("envoye", "==", False).stream()
-                for item in items:
-                    data = item.to_dict()
-                    if data.get("timestamp", "") <= maintenant:
-                        echus.append({"user_id": user_id, "doc_id": item.id, "message": data.get("message", "")})
+            for doc in docs:
+                data = doc.to_dict()
+                if data.get("timestamp", "") <= maintenant:
+                    echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
+            log.info(f"rappels_echus: {len(echus)} echus")
             return echus
         except Exception as e:
             log.warning(f"Erreur verification rappels: {e}")
@@ -257,6 +255,6 @@ class MemoryManager:
         if not self.db:
             return
         try:
-            self.db.collection("reminders").document(user_id).collection("items").document(doc_id).update({"envoye": True})
+            self.db.collection("reminders").document(doc_id).update({"envoye": True})
         except Exception as e:
             log.warning(f"Erreur marquage rappel: {e}")
