@@ -188,6 +188,26 @@ def keepalive():
             pass
         gc.collect()
 
+def verifier_rappels():
+    import httpx
+    token = os.getenv("TELEGRAM_TOKEN")
+    while True:
+        time.sleep(30)
+        if not token:
+            continue
+        try:
+            a = get_agent()
+            if not a.memory.db:
+                continue
+            echus = a.memory.rappels_echus()
+            for r in echus:
+                msg = f"Rappel : {r['message']}"
+                httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": r["user_id"], "text": msg}, timeout=10)
+                a.memory.marquer_envoye(r["user_id"], r["doc_id"])
+                log.info(f"Rappel envoye a {r['user_id']}: {r['message'][:40]}")
+        except Exception as e:
+            log.warning(f"Scheduler rappels: {e}")
+
 class SanteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -250,6 +270,8 @@ def main():
     t_keep.start()
     t_heart = threading.Thread(target=heartbeat, daemon=True)
     t_heart.start()
+    t_rappel = threading.Thread(target=verifier_rappels, daemon=True)
+    t_rappel.start()
     time.sleep(2)
     global _STOP
     while not _STOP:

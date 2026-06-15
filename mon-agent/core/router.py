@@ -4,23 +4,24 @@ import logging
 log = logging.getLogger("ROUTER")
 
 MOTS_CLEFS = {
-    "calendrier": ["calendrier", "agenda", "evenement", "rendez-vous", "semaine", "mois", "planning", "schedule", "calendar", "event", "reminder"],
-    "email": ["email", "mail", "courriel", "boite mail", "boîte mail", "boite reception", "boîte réception", "envoyer email", "envoyer mail", "lire email", "lire mail", "lire mes emails", "lire mes mails"],
-    "correction": ["corrige", "correction", "corriger", "feuille", "exercice", "devoir", "correction", "correct", "exercise"],
-    "notes": ["note", "eleve", "moyenne", "classe", "note", "student", "grade", "average"],
-    "fiches": ["fiche", "lecon", "cours", "exercice", "examen", "sujet", "lesson", "worksheet"],
-    "stats": ["statistique", "graphique", "progression", "rapport", "moyenne", "classe", "stats", "chart", "graph"],
-    "site_web": ["site", "utilisateur", "inscrit", "premium", "upload", "fichier", "dossier", "website", "user", "file"],
-    "recherche": ["cherche", "recherche", "google", "internet", "actualite", "info", "qu-est-ce que", "search", "what is", "difference entre"],
-    "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "mcp", "package", "dependance", "tool"],
+    "calendrier": ["calendrier", "agenda", "evenement", "rendez-vous"],
+    "email": ["email", "mail", "courriel", "boite mail", "boîte mail", "envoyer email", "envoyer mail", "lire email", "lire mail", "lire mes emails", "lire mes mails"],
+    "correction": ["corrige", "correction", "corriger", "feuille", "exercice", "devoir"],
+    "notes": ["note", "eleve", "moyenne", "classe", "student", "grade", "average"],
+    "fiches": ["fiche", "lecon", "cours", "examen", "lesson", "worksheet"],
+    "stats": ["statistique", "graphique", "progression", "rapport", "stats", "chart"],
+    "site_web": ["site web", "utilisateur", "inscrit"],
+    "recherche": ["cherche sur internet", "recherche google", "actualite", "search internet", "what is"],
+    "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "package", "dependance"],
     "meteo": ["meteo", "météo", "weather", "wttr"],
-    "traduction": ["traduis", "traduit", "traduction", "translate", "translation"],
-    "rappel": ["rappel", "rappelle", "rappeler", "remind", "reminder", "dans 1", "dans 2", "dans 3", "dans 5", "dans 10", "dans 15", "dans 30"],
-    "conversation": ["mode libre", "mode chat", "chat mode", "conversation", "active le chat", "desactive le chat"]
+    "traduction": ["traduis", "traduit", "traduction", "translate"],
+    "rappel": ["programme un rappel", "ajoute un rappel", "rappelle-moi", "rappelle moi", "crée un rappel", "liste mes rappels", "supprime rappel", "affiche mes rappels"],
+    "conversation": []
 }
 
 EXCLUSIONS = {
-    "rappel": [r'\btu te rappelles?\b', r'\bvous (vous )?rappelles?\b', r'\bse rappelle\b', r'\bse souvenir\b', r'\bte souviens.tu\b', r'\ben rappelle\b']
+    "rappel": [r'\btu te rappelles?\b', r'\bvous (vous )?rappelles?\b', r'\bse rappelle\b', r'\bse souvenir\b', r'\bte souviens.tu\b', r'\ben rappelle\b', r'\bje me rappelle\b', r'\bne .* rappelle pas\b'],
+    "calendrier": [r'\bquelle date\b', r'\bquel jour\b', r'\bdate du jour\b', r'\bc est quand\b']
 }
 
 def detecter_intention(texte):

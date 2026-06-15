@@ -190,3 +190,73 @@ class MemoryManager:
             self.db.collection("user_profile").document(user_id).set(profil, merge=True)
         except Exception as e:
             log.warning(f"Erreur sauvegarde profil: {e}")
+
+    # ── Rappels ──────────────────────────────────────
+    def ajouter_rappel(self, user_id, message, timestamp_iso):
+        if not self.db:
+            return None
+        try:
+            from datetime import datetime
+            doc_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
+            ref = self.db.collection("reminders").document(user_id).collection("items").document(doc_id)
+            ref.set({"message": message, "timestamp": timestamp_iso, "cree_le": datetime.now(ALGERIA_TZ).isoformat(), "envoye": False})
+            return doc_id
+        except Exception as e:
+            log.warning(f"Erreur ajout rappel: {e}")
+            return None
+
+    def liste_rappels(self, user_id, actifs=True):
+        if not self.db:
+            return {}
+        try:
+            ref = self.db.collection("reminders").document(user_id).collection("items")
+            docs = ref.where("envoye", "==", not actifs).stream() if not actifs else ref.stream()
+            rappels = {}
+            for d in docs:
+                data = d.to_dict()
+                if actifs and not data.get("envoye", False):
+                    rappels[d.id] = data
+                elif not actifs and data.get("envoye", False):
+                    rappels[d.id] = data
+            return rappels
+        except Exception as e:
+            log.warning(f"Erreur liste rappels: {e}")
+            return {}
+
+    def supprimer_rappel(self, user_id, doc_id):
+        if not self.db:
+            return False
+        try:
+            self.db.collection("reminders").document(user_id).collection("items").document(doc_id).delete()
+            return True
+        except Exception as e:
+            log.warning(f"Erreur suppression rappel: {e}")
+            return False
+
+    def rappels_echus(self):
+        """Retourne tous les rappels (tous users) dont l'echeance est passee et non envoyes"""
+        if not self.db:
+            return []
+        try:
+            maintenant = datetime.now(ALGERIA_TZ).isoformat()
+            users = self.db.collection("reminders").stream()
+            echus = []
+            for user_doc in users:
+                user_id = user_doc.id
+                items = self.db.collection("reminders").document(user_id).collection("items").where("envoye", "==", False).stream()
+                for item in items:
+                    data = item.to_dict()
+                    if data.get("timestamp", "") <= maintenant:
+                        echus.append({"user_id": user_id, "doc_id": item.id, "message": data.get("message", "")})
+            return echus
+        except Exception as e:
+            log.warning(f"Erreur verification rappels: {e}")
+            return []
+
+    def marquer_envoye(self, user_id, doc_id):
+        if not self.db:
+            return
+        try:
+            self.db.collection("reminders").document(user_id).collection("items").document(doc_id).update({"envoye": True})
+        except Exception as e:
+            log.warning(f"Erreur marquage rappel: {e}")
