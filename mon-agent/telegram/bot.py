@@ -191,22 +191,29 @@ def keepalive():
 def verifier_rappels():
     import httpx
     token = os.getenv("TELEGRAM_TOKEN")
+    log.info("Scheduler rappels demarre")
     while True:
-        time.sleep(30)
-        if not token:
-            continue
         try:
+            if not token:
+                log.warning("Scheduler: pas de token")
+                time.sleep(30)
+                continue
             a = get_agent()
             if not a.memory.db:
+                log.warning("Scheduler: a.memory.db est None")
+                time.sleep(30)
                 continue
             echus = a.memory.rappels_echus()
+            if echus:
+                log.info(f"Scheduler: {len(echus)} rappel(s) a envoyer")
             for r in echus:
                 msg = f"Rappel : {r['message']}"
-                httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": r["user_id"], "text": msg}, timeout=10)
+                resp = httpx.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": r["user_id"], "text": msg}, timeout=10)
+                log.info(f"Scheduler: envoi a {r['user_id']} -> {resp.status_code}")
                 a.memory.marquer_envoye(r["user_id"], r["doc_id"])
-                log.info(f"Rappel envoye a {r['user_id']}: {r['message'][:40]}")
         except Exception as e:
-            log.warning(f"Scheduler rappels: {e}")
+            log.warning(f"Scheduler rappels: {type(e).__name__}: {e}")
+        time.sleep(30)
 
 class SanteHandler(BaseHTTPRequestHandler):
     def do_GET(self):
