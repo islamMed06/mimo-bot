@@ -153,6 +153,7 @@ async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
+    envoyer_rappels()
     user_id = str(update.effective_user.id)
     texte = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
@@ -186,21 +187,42 @@ def keepalive():
             httpx.get(f"http://localhost:{port}", timeout=5)
         except Exception:
             pass
+        envoyer_rappels()
         gc.collect()
 
-async def verifier_rappels_callback(context: ContextTypes.DEFAULT_TYPE):
+def check_rappels_rapide():
+    """Thread court toutes les 15s pour les rappels"""
+    log.info("Check rappels rapide demarre")
+    while True:
+        time.sleep(15)
+        envoyer_rappels()
+
+def envoyer_rappels():
+    """Verifie et envoie les rappels echus (synchrone, appele par keepalive et message handler)"""
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        return
     try:
         a = get_agent()
         if not a.memory.db:
             return
         echus = a.memory.rappels_echus()
+        if not echus:
+            return
+        log.info(f"Scheduler: {len(echus)} rappel(s) a envoyer")
+        import httpx
         for r in echus:
             try:
-                await context.bot.send_message(chat_id=r["user_id"], text=f"Rappel : {r['message']}")
-                a.memory.marquer_envoye(r["user_id"], r["doc_id"])
-                log.info(f"Rappel envoye a {r['user_id']}: {r['message'][:40]}")
+                resp = httpx.post(
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    json={"chat_id": r["user_id"], "text": f"Rappel : {r['message']}"},
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    a.memory.marquer_envoye(r["user_id"], r["doc_id"])
+                    log.info(f"Rappel envoye a {r['user_id']}: {r['message'][:40]}")
             except Exception as e:
-                log.warning(f"Envoi rappel a {r['user_id']}: {e}")
+                log.warning(f"Envoi rappel: {e}")
     except Exception as e:
         log.warning(f"Scheduler rappels: {type(e).__name__}: {e}")
 
@@ -242,9 +264,6 @@ def lancer_bot():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
     for h in handlers:
         app.add_handler(h)
-    if app.job_queue:
-        app.job_queue.run_repeating(verifier_rappels_callback, interval=30, first=10)
-        log.info("Scheduler rappels actif (JobQueue 30s)")
     log.info("MimoBot demarre...")
     for t in range(4):
         try:
@@ -269,6 +288,8 @@ def main():
     t_keep.start()
     t_heart = threading.Thread(target=heartbeat, daemon=True)
     t_heart.start()
+    t_rapide = threading.Thread(target=check_rappels_rapide, daemon=True)
+    t_rapide.start()
     time.sleep(2)
     global _STOP
     while not _STOP:

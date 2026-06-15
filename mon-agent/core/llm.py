@@ -52,8 +52,6 @@ class LLMManager:
             langue = detecter_langue(user_message)
         base_fr = (
             f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
-            f"Nous sommes le {aujourdhui_fr} et il est {heure}. "
-            f"QUAND ON TE DEMANDE L'HEURE ou LA DATE, reponds avec ces informations ci-dessus. "
             f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
             f"Tu utilises Groq, Gemini, OpenRouter, HuggingFace, Cloudflare ou GitHub Models comme LLM (fallback automatique). "
             f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
@@ -63,8 +61,6 @@ class LLMManager:
         )
         base_en = (
             f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
-            f"Today is {aujourdhui_en} and the time is {heure}. "
-            f"WHEN ASKED FOR THE TIME or DATE, answer with the information above. "
             f"Always reply in the user's language. Be concise, clear, and helpful. "
             f"You use Groq, Gemini, OpenRouter, HuggingFace, Cloudflare or GitHub Models as LLM (auto fallback). "
             f"You have tools for calendar management, emails, student grades, lesson plans, "
@@ -139,8 +135,8 @@ class LLMManager:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
         maintenant = maintenant_algerie()
-        date_verrou = f"[Date] AUJOURD_HUI = {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (UTC+1 Algerie). IGNORE les dates ou heures dans les messages precedents."
-        messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": date_verrou}]
+        contexte_date = f"Contexte: Aujourd'hui = {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). Ne mentionne la date/heure que si l'utilisateur la demande explicitement."
+        messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
         limite = self.config["memoire"]["court_terme_max_messages"]
         # Inclure TOUS les messages system (resumes) en preservant l'ordre
         for msg in self.historique:
