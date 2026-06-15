@@ -14,6 +14,7 @@ log = logging.getLogger("BOT")
 
 HEARTBEAT_FILE = os.path.join(os.path.dirname(__file__), "..", "heartbeat.txt")
 agent = None
+_agent_lock = threading.Lock()
 START_TIME = time.time()
 POLL_COUNT = 0
 _TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -38,9 +39,10 @@ signal.signal(signal.SIGTERM, _stopper)
 LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
-    global agent
-    if agent is None:
-        agent = Agent()
+    global agent, _agent_lock
+    with _agent_lock:
+        if agent is None:
+            agent = Agent()
     return agent
 
 def heartbeat():
@@ -277,9 +279,14 @@ def lancer_bot():
             else:
                 break
 
+def demarrer_http(port):
+    from http.server import HTTPServer
+    server = HTTPServer(("0.0.0.0", port), SanteHandler)
+    server.serve_forever()
+
 def main():
     port = int(os.environ.get("PORT", 10000))
-    t_http = threading.Thread(target=HTTPServer(("0.0.0.0", port), SanteHandler).serve_forever, daemon=True)
+    t_http = threading.Thread(target=demarrer_http, args=(port,), daemon=True)
     t_http.start()
     t_keep = threading.Thread(target=keepalive, daemon=True)
     t_keep.start()

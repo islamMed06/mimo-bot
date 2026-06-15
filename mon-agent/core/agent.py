@@ -80,10 +80,18 @@ class Agent:
         else:
             profil = self.memory.charger_profil(user_id)
             identite = profil.get("identite")
-            if identite and not any(m["role"] == "system" and "[Profil utilisateur]" in m["content"] for m in self.llm.historique):
+            if identite and self.llm.identite_est_valide(identite) and not any(m["role"] == "system" and "[Profil utilisateur]" in m["content"] for m in self.llm.historique):
                 self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {identite}"})
                 log.info(f"Profil utilisateur injecte dans historique existant")
         self.memory.ajouter_message("user", texte, user_id)
+        # Detection auto si l'utilisateur se presente
+        m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(\w+)", texte.lower())
+        if m_name:
+            nom = m_name.group(1).capitalize()
+            profil = self.memory.charger_profil(user_id)
+            profil["identite"] = f"L'utilisateur s'appelle {nom}."
+            self.memory.sauvegarder_profil(profil, user_id)
+            log.info(f"Identite definie via phrase: {nom}")
         intention = detecter_intention(texte)
         log.info(f"Intention detectee: {intention}")
         outil = executer_intention(intention, texte, self.outils)
@@ -107,7 +115,7 @@ class Agent:
         import re
         profil = self.memory.charger_profil(user_id)
         identite = profil.get("identite")
-        if identite:
+        if identite and self.llm.identite_est_valide(identite):
             self.llm.historique.append({"role": "system", "content": f"[Profil utilisateur] {identite}"})
         resume = self.memory.charger_resume(user_id)
         if resume:
@@ -122,8 +130,8 @@ class Agent:
                 dates_anciennes.add(match.group(1))
                 contenu = contenu[match.end():]
             self.llm.historique.append({"role": m["role"], "content": contenu})
-        # Extraire l'identite AVANT resumation (messages non filtres)
-        if not identite and messages:
+        # Extraire l'identite AVANT resumation (messages non filtres) si l'existante est invalide
+        if (not identite or not self.llm.identite_est_valide(identite)) and messages:
             extraites = self.llm._extraire_identite(user_id, messages)
             if extraites:
                 self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {extraites}"})

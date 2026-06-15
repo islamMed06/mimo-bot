@@ -99,13 +99,27 @@ class LLMManager:
                         max_tokens=100
                     )
                     identite = comp.choices[0].message.content.strip()
-                    if identite and identite != "RIEN":
+                    if self.identite_est_valide(identite):
                         profil = self.memory.charger_profil(user_id)
                         profil["identite"] = identite
                         self.memory.sauvegarder_profil(profil, user_id)
-                        log.info(f"Identite utilisateur sauvegardee: {identite[:60]}")
+                        log.info(f"Identite sauvegardee: {identite[:60]}")
+                    else:
+                        log.info(f"Identite ignoree ({identite[:40]})")
                 except Exception as e:
                     log.warning(f"Erreur extraction identite: {e}")
+
+    def identite_est_valide(self, identite):
+        if not identite:
+            return False
+        s = identite.strip().rstrip(".,!?;").lower()
+        if s in ("rien", "aucune", "inconnu", "unknown", "none", "no info"):
+            return False
+        if s.startswith("la date") or s.startswith("the date") or s.startswith("aujourd"):
+            return False
+        if len(s) < 10:
+            return False
+        return True
 
     def _extraire_identite(self, user_id, messages=None):
         try:
@@ -119,12 +133,13 @@ class LLMManager:
                 max_tokens=100
             )
             identite = comp.choices[0].message.content.strip()
-            if identite and identite != "RIEN":
+            if self.identite_est_valide(identite):
                 profil = self.memory.charger_profil(user_id)
                 profil["identite"] = identite
                 self.memory.sauvegarder_profil(profil, user_id)
                 log.info(f"Identite extraite: {identite[:60]}")
                 return identite
+            log.info(f"Identite extraite ignoree ({identite[:40]})")
         except Exception as e:
             log.warning(f"Erreur extraction identite: {e}")
         return None
