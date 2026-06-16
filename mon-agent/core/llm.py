@@ -7,7 +7,6 @@ from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from groq import Groq, RateLimitError
 from dotenv import load_dotenv
-import httpx
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
@@ -19,18 +18,23 @@ def _fetch_http_time():
     if _HTTP_TIME_CACHE[0] is not None and now - _HTTP_TIME_CACHE[1] < 30:
         return _HTTP_TIME_CACHE[0]
     try:
-        # Use Telegram API Date header (always reachable)
         token = os.getenv("TELEGRAM_TOKEN")
         if token:
-            resp = httpx.head(f"https://api.telegram.org/bot{token}/getMe", timeout=5)
-            date_str = resp.headers.get("Date")
-            if date_str:
-                dt = parsedate_to_datetime(date_str)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc) if 'GMT' in date_str else dt
-                _HTTP_TIME_CACHE[0] = dt
-                _HTTP_TIME_CACHE[1] = now
-                return dt
+            import urllib.request
+            req = urllib.request.Request(f"https://api.telegram.org/bot{token}/getMe", method="GET")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                date_str = resp.headers.get("Date")
+                if date_str:
+                    dt = parsedate_to_datetime(date_str)
+                    if dt is None:
+                        log.warning(f"Echec parse Date: {date_str}")
+                        return None
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    _HTTP_TIME_CACHE[0] = dt
+                    _HTTP_TIME_CACHE[1] = now
+                    log.info(f"Heure HTTP: {dt.strftime('%H:%M:%S')} UTC")
+                    return dt
     except Exception as e:
         log.warning(f"Echec HTTP time: {e}")
     return None
