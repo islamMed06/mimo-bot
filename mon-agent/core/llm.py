@@ -147,18 +147,24 @@ class LLMManager:
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
-        maintenant = msg_date.replace(tzinfo=timezone.utc).astimezone(ALGERIA_TZ) if msg_date else maintenant_algerie()
-        # Si l'utilisateur demande l'heure, on la recupere via API et on l'injecte
-        est_heure = bool(re.search(r'(quelle heure|il est|heure|current time|what time|l.heure)', user_message.lower()))
-        if est_heure:
-            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure Algerie: {maintenant.strftime('%H:%M')}."
+        if msg_date:
+            try:
+                ts = msg_date.timestamp()
+                maintenant = datetime.fromtimestamp(ts, tz=ALGERIA_TZ)
+                log.info(f"Heure via Telegram: ts={ts}, algerie={maintenant.strftime('%H:%M')}")
+            except Exception as e:
+                log.warning(f"Erreur conversion msg_date: {e}")
+                maintenant = maintenant_algerie()
         else:
-            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). REGLE: ne mentionne jamais l'heure sauf si demande explicite."
+            maintenant = maintenant_algerie()
+        contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne l'heure que si l'utilisateur la demande."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
         limite = self.config["memoire"]["court_terme_max_messages"]
-        # Inclure TOUS les messages system (resumes) en preservant l'ordre
+        # Inclure les messages system (resumes, profil) en filtrant les vieilles dates
         for msg in self.historique:
             if msg["role"] == "system":
+                if msg["content"].startswith("Auj:") or msg["content"].startswith("Contexte:"):
+                    continue
                 messages.append(msg)
         # Puis les messages user/assistant les plus recents
         recents = [m for m in self.historique if m["role"] != "system"]
