@@ -151,6 +151,14 @@ activemq-data/
 # Environments
 .env
 .envrc
+.env.example
+
+# Firebase credentials
+*.json
+
+# Project docs (contain secrets or are local)
+prompt-agent.md
+recapitulatif-projet.md
 .venv
 env/
 venv/

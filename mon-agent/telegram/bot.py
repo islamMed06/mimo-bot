@@ -284,6 +284,22 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
                     )
                 finally:
                     loop.close()
+
+                admin_supabase = os.getenv("ADMIN_SUPABASE_ID")
+                admin_telegram = os.getenv("ADMIN_TELEGRAM_ID")
+                token = os.getenv("TELEGRAM_TOKEN")
+                if admin_supabase and admin_telegram and token and user_id == admin_supabase:
+                    try:
+                        import httpx
+                        text = f"\U0001f9d1\u200d\U0001f4bb Vous (Web) : {message}\n\n\U0001f916 MimoBot : {reponse}"
+                        httpx.post(
+                            f"https://api.telegram.org/bot{token}/sendMessage",
+                            json={"chat_id": admin_telegram, "text": text},
+                            timeout=10
+                        )
+                    except Exception as e:
+                        log.warning(f"Forward web -> Telegram: {e}")
+
                 self._json(200, {"response": reponse, "source": source})
             else:
                 self._json(404, {"error": "not found"})
