@@ -85,13 +85,14 @@ class Agent:
                 log.info(f"Profil utilisateur injecte dans historique existant")
         self.memory.ajouter_message("user", texte, user_id)
         # Detection auto si l'utilisateur se presente
-        m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(\w+)", texte.lower())
+        m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(.+)", texte.lower())
         if m_name:
-            nom = m_name.group(1).capitalize()
-            profil = self.memory.charger_profil(user_id)
-            profil["identite"] = f"L'utilisateur s'appelle {nom}."
-            self.memory.sauvegarder_profil(profil, user_id)
-            log.info(f"Identite definie via phrase: {nom}")
+            nom = m_name.group(1).strip().rstrip(".,!?;").capitalize()
+            if nom and len(nom) >= 2:
+                profil = self.memory.charger_profil(user_id)
+                profil["identite"] = f"L'utilisateur s'appelle {nom}."
+                self.memory.sauvegarder_profil(profil, user_id)
+                log.info(f"Identite definie via phrase: {nom}")
         intention = detecter_intention(texte)
         log.info(f"Intention detectee: {intention}")
         outil = executer_intention(intention, texte, self.outils)
@@ -130,11 +131,24 @@ class Agent:
                 dates_anciennes.add(match.group(1))
                 contenu = contenu[match.end():]
             self.llm.historique.append({"role": m["role"], "content": contenu})
-        # Extraire l'identite AVANT resumation (messages non filtres) si l'existante est invalide
+        # Scanner les messages pour trouver des auto-presentations (regex)
         if (not identite or not self.llm.identite_est_valide(identite)) and messages:
-            extraites = self.llm._extraire_identite(user_id, messages)
-            if extraites:
-                self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {extraites}"})
+            trouve = False
+            for m in messages:
+                m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(.+)", m["content"].lower())
+                if m_name:
+                    nom = m_name.group(1).strip().rstrip(".,!?;").capitalize()
+                    profil = self.memory.charger_profil(user_id)
+                    profil["identite"] = f"L'utilisateur s'appelle {nom}."
+                    self.memory.sauvegarder_profil(profil, user_id)
+                    self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] L'utilisateur s'appelle {nom}."})
+                    log.info(f"Identite restauree depuis historique: {nom}")
+                    trouve = True
+                    break
+            if not trouve:
+                extraites = self.llm._extraire_identite(user_id, messages)
+                if extraites:
+                    self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {extraites}"})
         if dates_anciennes:
             dates_txt = ", ".join(sorted(dates_anciennes))
             self.llm.historique.insert(0, {"role": "system", "content": f"[Dates] Messages du {dates_txt} viennent de sessions precedentes."})

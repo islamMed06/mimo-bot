@@ -187,21 +187,6 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.warning(f"Echec cache msg_date: {e}")
     envoyer_rappels()
     user_id = str(update.effective_user.id)
-    # Sauvegarder le nom Telegram comme identite si pas deja fait
-    try:
-        if update.effective_user:
-            prenom = (update.effective_user.first_name or "").strip()
-            nom_famille = (update.effective_user.last_name or "").strip()
-            nom_complet = f"{prenom} {nom_famille}".strip()
-            if nom_complet:
-                a = get_agent()
-                profil = a.memory.charger_profil(user_id)
-                if not profil.get("identite"):
-                    profil["identite"] = f"L'utilisateur s'appelle {nom_complet}."
-                    a.memory.sauvegarder_profil(profil, user_id)
-                    log.info(f"Identite Telegram sauvegardee: {nom_complet}")
-    except Exception as e:
-        log.warning(f"Erreur sauvegarde identite Telegram: {e}")
     admin_tg = os.getenv("ADMIN_TELEGRAM_ID")
     admin_supabase = os.getenv("ADMIN_SUPABASE_ID")
     if admin_tg and admin_supabase and user_id == admin_tg:
