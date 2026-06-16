@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import time
 import logging
 from datetime import datetime, timezone, timedelta
@@ -9,45 +10,12 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 ALGERIA_TZ = timezone(timedelta(hours=1))
-_DECALAGE_CACHE = [None]  # [offset_seconds] ou None
-
-def _synchroniser_horloge():
-    try:
-        import httpx
-        for url in ["https://api.github.com", "https://google.com", "https://cloudflare.com"]:
-            try:
-                r = httpx.get(url, timeout=5)
-                ts = r.headers.get("Date")
-                if ts:
-                    dt_api = datetime.strptime(ts.replace("GMT", "+0000").replace("UTC", "+0000"), "%a, %d %b %Y %H:%M:%S %z")
-                    system_local = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
-                    decalage = (dt_api - system_local).total_seconds()
-                    _DECALAGE_CACHE[0] = decalage
-                    log.info(f"Horloge synchronisee via {url}, decalage={decalage:.0f}s")
-                    return True
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return False
 
 def maintenant_algerie():
-    if _DECALAGE_CACHE[0] is not None:
-        decalage = _DECALAGE_CACHE[0]
-    else:
-        decalage = 0
-        if _synchroniser_horloge():
-            decalage = _DECALAGE_CACHE[0]
-    systeme = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
-    corrige = systeme + timedelta(seconds=decalage) if decalage else systeme
-    return corrige.astimezone(ALGERIA_TZ)
+    return datetime.now(timezone.utc).replace(tzinfo=timezone.utc).astimezone(ALGERIA_TZ)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("LLM")
-# Synchroniser l'horloge au demarrage
-_synchroniser_horloge()
-if _DECALAGE_CACHE[0]:
-    log.info(f"Decalage horaire corrige: {_DECALAGE_CACHE[0]:.0f}s")
 
 def detecter_langue(texte):
     import re
@@ -174,13 +142,40 @@ class LLMManager:
             log.warning(f"Erreur extraction identite: {e}")
         return None
 
+    def _heure_exacte(self):
+        try:
+            import httpx
+            r = httpx.get("http://worldtimeapi.org/api/timezone/Africa/Algiers", timeout=5)
+            if r.status_code == 200:
+                dt = r.json()["datetime"]
+                return datetime.fromisoformat(dt.replace("Z", "+00:00")).astimezone(ALGERIA_TZ).strftime("%H:%M")
+        except Exception:
+            pass
+        try:
+            import httpx
+            for url in ["https://api.github.com", "https://google.com"]:
+                r = httpx.get(url, timeout=5)
+                ts = r.headers.get("Date")
+                if ts:
+                    dt = datetime.strptime(ts.replace("GMT", "+0000").replace("UTC", "+0000"), "%a, %d %b %Y %H:%M:%S %z")
+                    return dt.astimezone(ALGERIA_TZ).strftime("%H:%M")
+        except Exception:
+            pass
+        return None
+
     def repondre(self, user_message, user_id=None):
         self.historique.append({"role": "user", "content": user_message})
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
         maintenant = maintenant_algerie()
-        contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne jamais la date/heure sauf si l'utilisateur demande explicitement. Meme pour 'bonjour'/'bonsoir'."
+        # Si l'utilisateur demande l'heure, on la recupere via API et on l'injecte
+        est_heure = bool(re.search(r'(quelle heure|il est|heure actuelle|current time|what time)', user_message.lower()))
+        if est_heure:
+            h = self._heure_exacte()
+            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure exacte (Algerie): {h}" if h else f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure indisponible."
+        else:
+            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). REGLE: ne mentionne jamais l'heure sauf si demande explicite."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
         limite = self.config["memoire"]["court_terme_max_messages"]
         # Inclure TOUS les messages system (resumes) en preservant l'ordre
