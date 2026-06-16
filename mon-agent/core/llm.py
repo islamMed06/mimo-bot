@@ -12,23 +12,21 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 ALGERIA_TZ = timezone(timedelta(hours=1))
 
-# Clock calibration: offset = Telegram_server_time - system_time (seconds)
-_TELEGRAM_OFFSET = None  # set by calibrer_heure() on each incoming message
-_HTTP_TIME_CACHE = [None, 0.0]  # [datetime_utc, timestamp_last_fetch], fallback only
+# Unique cache: [datetime_utc, timestamp_last_fetch]
+_HTTP_TIME_CACHE = [None, 0.0]
 
-def calibrer_heure(telegram_date):
-    """Calibrate clock from incoming Telegram message timestamp (server UTC)."""
-    global _TELEGRAM_OFFSET
-    if telegram_date is None:
+def defraichir_cache_http(dt_utc):
+    """Appele depuis keepalive pour maintenir le cache a jour."""
+    if dt_utc is None:
         return
-    if telegram_date.tzinfo is None:
-        telegram_date = telegram_date.replace(tzinfo=timezone.utc)
-    _TELEGRAM_OFFSET = telegram_date.timestamp() - time.time()
-    log.info(f"Offset calibre: {_TELEGRAM_OFFSET:+.2f}s")
+    if dt_utc.tzinfo is None:
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+    _HTTP_TIME_CACHE[0] = dt_utc
+    _HTTP_TIME_CACHE[1] = time.time()
 
 def _fetch_http_time():
     now = time.time()
-    if _HTTP_TIME_CACHE[0] is not None and now - _HTTP_TIME_CACHE[1] < 30:
+    if _HTTP_TIME_CACHE[0] is not None and now - _HTTP_TIME_CACHE[1] < 60:
         return _HTTP_TIME_CACHE[0]
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
@@ -46,8 +44,7 @@ def _fetch_http_time():
                     continue
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
-                _HTTP_TIME_CACHE[0] = dt
-                _HTTP_TIME_CACHE[1] = now
+                defraichir_cache_http(dt)
                 return dt
         except Exception as e:
             log.warning(f"Echec HTTP time tentative {attempt+1}: {e}")
@@ -56,16 +53,13 @@ def _fetch_http_time():
     return None
 
 def maintenant_algerie():
-    global _TELEGRAM_OFFSET
-    # 1) Offset Telegram (recalibre a chaque message utilisateur)
-    if _TELEGRAM_OFFSET is not None:
-        adjusted_ts = time.time() + _TELEGRAM_OFFSET
-        return (datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=adjusted_ts)).astimezone(ALGERIA_TZ)
-    # 2) HTTP Date header (fallback demarrage)
     http_dt = _fetch_http_time()
     if http_dt is not None:
         return http_dt.astimezone(ALGERIA_TZ)
-    # 3) System clock (dernier recours)
+    if _HTTP_TIME_CACHE[0] is not None:
+        stale = datetime.now(timezone.utc).timestamp() - _HTTP_TIME_CACHE[0].timestamp()
+        if stale < 600:
+            return _HTTP_TIME_CACHE[0].astimezone(ALGERIA_TZ)
     log.warning("Aucune source de temps fiable, fallback system clock")
     return datetime.now(timezone.utc).replace(tzinfo=timezone.utc).astimezone(ALGERIA_TZ)
 

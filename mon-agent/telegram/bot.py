@@ -1,4 +1,5 @@
 import os, sys, time, asyncio, logging, threading, gc, atexit, signal, json
+from email.utils import parsedate_to_datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -8,7 +9,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from core.agent import Agent
-from core.llm import maintenant_algerie, _TELEGRAM_OFFSET
+from core.llm import maintenant_algerie, defraichir_cache_http
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("BOT")
@@ -142,9 +143,7 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = maintenant_algerie()
-    off = _TELEGRAM_OFFSET
-    src = f"offset Telegram ({off:+.1f}s)" if off is not None else "HTTP Date"
-    await update.message.reply_text(f"Heure: {now.strftime('%H:%M:%S')} src: {src}")
+    await update.message.reply_text(f"Heure: {now.strftime('%H:%M:%S')}")
 
 async def setname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nom = " ".join(context.args) if context.args else ""
@@ -211,7 +210,14 @@ def keepalive():
         envoyer_rappels()
         if counter % 8 == 0:
             try:
-                httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+                resp = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+                date_str = resp.headers.get("Date")
+                if date_str:
+                    dt = parsedate_to_datetime(date_str)
+                    if dt:
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        defraichir_cache_http(dt)
             except Exception:
                 pass
             try:
