@@ -147,7 +147,7 @@ class LLMManager:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
         maintenant = maintenant_algerie()
-        contexte_date = f"Contexte: Aujourd'hui = {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). Ne mentionne la date/heure que si l'utilisateur la demande explicitement."
+        contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne jamais la date/heure sauf si l'utilisateur demande explicitement. Meme pour 'bonjour'/'bonsoir'."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
         limite = self.config["memoire"]["court_terme_max_messages"]
         # Inclure TOUS les messages system (resumes) en preservant l'ordre
