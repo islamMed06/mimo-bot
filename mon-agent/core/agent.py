@@ -75,6 +75,8 @@ class Agent:
     async def traiter_message(self, texte, user_id="default", msg_date=None):
         import re
         from core.router import detecter_intention, executer_intention
+        from core.llm import calibrer_heure
+        calibrer_heure(msg_date)  # calibrer horloge sur chaque message Telegram
         if not self.llm.historique:
             self._restaurer_contexte(user_id)
         else:

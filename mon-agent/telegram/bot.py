@@ -8,7 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from core.agent import Agent
-from core.llm import maintenant_algerie
+from core.llm import maintenant_algerie, _TELEGRAM_OFFSET
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("BOT")
@@ -142,7 +142,9 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = maintenant_algerie()
-    await update.message.reply_text(f"Heure: {now.strftime('%H:%M:%S')} commit: 13b082c")
+    off = _TELEGRAM_OFFSET
+    src = f"offset Telegram ({off:+.1f}s)" if off is not None else "HTTP Date"
+    await update.message.reply_text(f"Heure: {now.strftime('%H:%M:%S')} src: {src}")
 
 async def setname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nom = " ".join(context.args) if context.args else ""
