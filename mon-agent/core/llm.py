@@ -147,7 +147,7 @@ class LLMManager:
             import socket, struct
             client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             client.settimeout(3)
-            data = b'\x1b' + 47 * b'\x0'
+            data = b'\x1b' + 47 * b'\x00'
             client.sendto(data, ("pool.ntp.org", 123))
             data, _ = client.recvfrom(1024)
             client.close()
