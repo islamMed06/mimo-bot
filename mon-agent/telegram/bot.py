@@ -8,8 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from core.agent import Agent
-from datetime import timezone
-from core.llm import maintenant_algerie, _TELEGRAM_TIME_CACHE, _EPOCH
+from core.llm import maintenant_algerie
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("BOT")
@@ -143,7 +142,7 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = maintenant_algerie()
-    await update.message.reply_text(f"Cache: {_TELEGRAM_TIME_CACHE[0]}\nHeure: {now.strftime('%H:%M:%S')}")
+    await update.message.reply_text(f"Heure: {now.strftime('%H:%M:%S')} (source: HTTP Date)")
 
 async def setname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nom = " ".join(context.args) if context.args else ""
@@ -173,18 +172,6 @@ async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
-    # Cache le timestamp Telegram DES L'ARRIVEE du message
-    try:
-        d = update.message.date
-        if d is not None:
-            if d.tzinfo is None:
-                utc_dt = d.replace(tzinfo=timezone.utc)
-            else:
-                utc_dt = d.astimezone(timezone.utc)
-            _TELEGRAM_TIME_CACHE[0] = (utc_dt - _EPOCH).total_seconds()
-            log.info(f"Cache mis a jour: ts={_TELEGRAM_TIME_CACHE[0]}")
-    except Exception as e:
-        log.warning(f"Echec cache msg_date: {e}")
     envoyer_rappels()
     user_id = str(update.effective_user.id)
     admin_tg = os.getenv("ADMIN_TELEGRAM_ID")

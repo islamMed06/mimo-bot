@@ -4,19 +4,42 @@ import re
 import time
 import logging
 from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from groq import Groq, RateLimitError
 from dotenv import load_dotenv
+import httpx
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 ALGERIA_TZ = timezone(timedelta(hours=1))
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-_TELEGRAM_TIME_CACHE = [None]  # Dernier timestamp Telegram recu
+_HTTP_TIME_CACHE = [None, 0.0]  # [datetime_utc, timestamp_last_fetch]
+
+def _fetch_http_time():
+    now = time.time()
+    if _HTTP_TIME_CACHE[0] is not None and now - _HTTP_TIME_CACHE[1] < 30:
+        return _HTTP_TIME_CACHE[0]
+    try:
+        # Use Telegram API Date header (always reachable)
+        token = os.getenv("TELEGRAM_TOKEN")
+        if token:
+            resp = httpx.head(f"https://api.telegram.org/bot{token}/getMe", timeout=5)
+            date_str = resp.headers.get("Date")
+            if date_str:
+                dt = parsedate_to_datetime(date_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc) if 'GMT' in date_str else dt
+                _HTTP_TIME_CACHE[0] = dt
+                _HTTP_TIME_CACHE[1] = now
+                return dt
+    except Exception as e:
+        log.warning(f"Echec HTTP time: {e}")
+    return None
 
 def maintenant_algerie():
-    if _TELEGRAM_TIME_CACHE[0] is not None:
-        return (_EPOCH + timedelta(seconds=_TELEGRAM_TIME_CACHE[0])).astimezone(ALGERIA_TZ)
-    return datetime.now(timezone.utc).astimezone(ALGERIA_TZ)
+    http_dt = _fetch_http_time()
+    if http_dt is not None:
+        return http_dt.astimezone(ALGERIA_TZ)
+    return datetime.now(timezone.utc).replace(tzinfo=timezone.utc).astimezone(ALGERIA_TZ)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("LLM")
@@ -151,20 +174,7 @@ class LLMManager:
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
-        if msg_date:
-            try:
-                if msg_date.tzinfo is None:
-                    utc_dt = msg_date.replace(tzinfo=timezone.utc)
-                else:
-                    utc_dt = msg_date.astimezone(timezone.utc)
-                ts = (utc_dt - _EPOCH).total_seconds()
-                _TELEGRAM_TIME_CACHE[0] = ts
-                maintenant = (_EPOCH + timedelta(seconds=ts)).astimezone(ALGERIA_TZ)
-            except Exception as e:
-                log.warning(f"Erreur conversion msg_date: {e}")
-                maintenant = maintenant_algerie()
-        else:
-            maintenant = maintenant_algerie()
+        maintenant = maintenant_algerie()
         est_demande_heure = bool(re.search(r'(quelle heure|il est|l. heure? *$|current time|what time)', user_message.lower()))
         if est_demande_heure:
             contexte_date = f"HEURE OFFICIELLE: {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). Reponds UNIQUEMENT avec cette heure EXACTE, sans commentaire, sans la modifier."
