@@ -212,6 +212,8 @@ class LLMManager:
                 messages.append(msg)
         # Puis les messages user/assistant les plus recents
         recents = [m for m in self.historique if m["role"] != "system"]
+        if est_demande_heure:
+            recents = [m for m in recents if not (m["role"] == "assistant" and re.search(r'\b\d{1,2}:\d{2}\b', m["content"]))]
         for msg in recents[-limite:]:
             messages.append(msg)
         fallbacks = [
