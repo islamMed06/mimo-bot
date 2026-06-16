@@ -14,13 +14,19 @@ _DECALAGE_CACHE = [None]  # [offset_seconds] ou None
 def _synchroniser_horloge():
     try:
         import httpx
-        r = httpx.get("https://worldtimeapi.org/api/timezone/Africa/Algiers", timeout=5)
-        if r.status_code == 200:
-            dt_api = datetime.fromisoformat(r.json()["datetime"].replace("Z", "+00:00"))
-            system_local = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
-            decalage = (dt_api - system_local).total_seconds()
-            _DECALAGE_CACHE[0] = decalage
-            return True
+        for url in ["https://api.github.com", "https://google.com", "https://cloudflare.com"]:
+            try:
+                r = httpx.get(url, timeout=5)
+                ts = r.headers.get("Date")
+                if ts:
+                    dt_api = datetime.strptime(ts.replace("GMT", "+0000").replace("UTC", "+0000"), "%a, %d %b %Y %H:%M:%S %z")
+                    system_local = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+                    decalage = (dt_api - system_local).total_seconds()
+                    _DECALAGE_CACHE[0] = decalage
+                    log.info(f"Horloge synchronisee via {url}, decalage={decalage:.0f}s")
+                    return True
+            except Exception:
+                continue
     except Exception:
         pass
     return False
