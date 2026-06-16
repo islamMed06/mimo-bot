@@ -9,12 +9,39 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 ALGERIA_TZ = timezone(timedelta(hours=1))
+_DECALAGE_CACHE = [None]  # [offset_seconds] ou None
+
+def _synchroniser_horloge():
+    try:
+        import httpx
+        r = httpx.get("https://worldtimeapi.org/api/timezone/Africa/Algiers", timeout=5)
+        if r.status_code == 200:
+            dt_api = datetime.fromisoformat(r.json()["datetime"].replace("Z", "+00:00"))
+            system_local = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+            decalage = (dt_api - system_local).total_seconds()
+            _DECALAGE_CACHE[0] = decalage
+            return True
+    except Exception:
+        pass
+    return False
 
 def maintenant_algerie():
-    return datetime.now(ALGERIA_TZ)
+    if _DECALAGE_CACHE[0] is not None:
+        decalage = _DECALAGE_CACHE[0]
+    else:
+        decalage = 0
+        if _synchroniser_horloge():
+            decalage = _DECALAGE_CACHE[0]
+    systeme = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    corrige = systeme + timedelta(seconds=decalage) if decalage else systeme
+    return corrige.astimezone(ALGERIA_TZ)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("LLM")
+# Synchroniser l'horloge au demarrage
+_synchroniser_horloge()
+if _DECALAGE_CACHE[0]:
+    log.info(f"Decalage horaire corrige: {_DECALAGE_CACHE[0]:.0f}s")
 
 def detecter_langue(texte):
     import re
