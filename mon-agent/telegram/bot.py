@@ -1,4 +1,4 @@
-import os, sys, time, logging, threading, gc, atexit, signal, json
+import os, sys, time, asyncio, logging, threading, gc, atexit, signal, json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
