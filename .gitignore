@@ -217,9 +217,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Secrets.env.example
-*.json
-prompt-agent.md
-recapitulatif-projet.md
-site/
