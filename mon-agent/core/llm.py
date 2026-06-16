@@ -196,7 +196,7 @@ class LLMManager:
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         maintenant = maintenant_algerie()
-        est_demande_heure = bool(re.search(r'(quelle heure|il est|l. heure? *$|current time|what time)', user_message.lower()))
+        est_demande_heure = bool(re.search(r"(quelle heure|il est|l'?heure? *$|current time|what time)", user_message.lower()))
         if est_demande_heure:
             texte = f"Il est {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}."
             self.historique.append({"role": "assistant", "content": texte})
