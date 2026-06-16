@@ -4,7 +4,6 @@ import time
 import logging
 from datetime import datetime, timezone, timedelta
 from groq import Groq, RateLimitError
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -27,10 +26,8 @@ class LLMManager:
         self.config = config
         self.memory = memory
         self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if gemini_key:
-            genai.configure(api_key=gemini_key)
-        self.gemini_disponible = bool(gemini_key)
+        self.gemini_key = os.getenv("GEMINI_API_KEY")
+        self.gemini_disponible = bool(self.gemini_key)
         self.llm_actif = "groq"
         self.historique = []
         for nom in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]:
@@ -164,11 +161,15 @@ class LLMManager:
         fallbacks = [
             ("groq", self._appeler_groq),
             ("gemini", self._appeler_gemini),
-            ("openrouter", self._appeler_openrouter),
-            ("huggingface", self._appeler_huggingface),
-            ("cloudflare", self._appeler_cloudflare),
-            ("github", self._appeler_github),
         ]
+        if os.getenv("OPENROUTER_API_KEY"):
+            fallbacks.append(("openrouter", self._appeler_openrouter))
+        if os.getenv("HF_API_KEY"):
+            fallbacks.append(("huggingface", self._appeler_huggingface))
+        if os.getenv("CLOUDFLARE_API_TOKEN"):
+            fallbacks.append(("cloudflare", self._appeler_cloudflare))
+        if os.getenv("GITHUB_TOKEN"):
+            fallbacks.append(("github", self._appeler_github))
         for nom, methode in fallbacks:
             texte = methode(messages)
             if texte:
@@ -217,11 +218,14 @@ class LLMManager:
 
     def _appeler_gemini(self, messages):
         try:
+            import google.generativeai as genai
+            genai.configure(api_key=self.gemini_key)
             system_msg = messages[0]["content"]
             user_msgs = [m["content"] for m in messages[1:]]
             prompt = f"{system_msg}\n\n" + "\n".join(user_msgs)
             model = genai.GenerativeModel(self.config["llm"]["modele_gemini"])
             reponse = model.generate_content(prompt)
+            import gc; gc.collect()
             return reponse.text
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:150]}"
