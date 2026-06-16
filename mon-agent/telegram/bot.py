@@ -160,7 +160,7 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texte = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
-        reponse, source = await get_agent().traiter_message(texte, user_id)
+        reponse, source = await get_agent().traiter_message(texte, user_id, msg_date=update.message.date)
         if isinstance(reponse, str):
             await update.message.reply_text(reponse)
         elif isinstance(reponse, dict) and reponse.get("type") == "confirmation":

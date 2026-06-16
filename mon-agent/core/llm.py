@@ -142,59 +142,16 @@ class LLMManager:
             log.warning(f"Erreur extraction identite: {e}")
         return None
 
-    def _heure_ntp(self):
-        try:
-            import socket, struct
-            client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            client.settimeout(3)
-            data = b'\x1b' + 47 * b'\x00'
-            client.sendto(data, ("pool.ntp.org", 123))
-            data, _ = client.recvfrom(1024)
-            client.close()
-            ts = struct.unpack("!12I", data)[10]
-            ts -= 2208988800
-            return datetime.fromtimestamp(ts, tz=ALGERIA_TZ).strftime("%H:%M")
-        except Exception:
-            return None
-
-    def _heure_exacte(self):
-        # Essai 1: worldtimeapi.org
-        try:
-            import httpx
-            r = httpx.get("http://worldtimeapi.org/api/timezone/Africa/Algiers", timeout=5)
-            if r.status_code == 200:
-                dt = r.json()["datetime"]
-                return datetime.fromisoformat(dt.replace("Z", "+00:00")).astimezone(ALGERIA_TZ).strftime("%H:%M")
-        except Exception:
-            pass
-        # Essai 2: Date header HTTP
-        try:
-            import httpx
-            for url in ["https://api.github.com", "https://google.com"]:
-                r = httpx.get(url, timeout=5)
-                ts = r.headers.get("Date")
-                if ts:
-                    dt = datetime.strptime(ts.replace("GMT", "+0000").replace("UTC", "+0000"), "%a, %d %b %Y %H:%M:%S %z")
-                    return dt.astimezone(ALGERIA_TZ).strftime("%H:%M")
-        except Exception:
-            pass
-        # Essai 3: NTP direct (contourne les proxys HTTP)
-        ntp = self._heure_ntp()
-        if ntp:
-            return ntp
-        return None
-
-    def repondre(self, user_message, user_id=None):
+    def repondre(self, user_message, user_id=None, msg_date=None):
         self.historique.append({"role": "user", "content": user_message})
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
-        maintenant = maintenant_algerie()
+        maintenant = msg_date.astimezone(ALGERIA_TZ) if msg_date else maintenant_algerie()
         # Si l'utilisateur demande l'heure, on la recupere via API et on l'injecte
-        est_heure = bool(re.search(r'(quelle heure|il est|heure actuelle|current time|what time|l.heure|donne.moi l.heure)', user_message.lower()))
+        est_heure = bool(re.search(r'(quelle heure|il est|heure|current time|what time|l.heure)', user_message.lower()))
         if est_heure:
-            h = self._heure_exacte()
-            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure exacte (Algerie): {h}" if h else f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure indisponible."
+            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure Algerie: {maintenant.strftime('%H:%M')}."
         else:
             contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). REGLE: ne mentionne jamais l'heure sauf si demande explicite."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]

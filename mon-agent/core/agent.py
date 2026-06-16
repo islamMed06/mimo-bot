@@ -72,7 +72,7 @@ class Agent:
         outils_mcp = mcp_loader.charger()
         self.outils.update(outils_mcp)
 
-    async def traiter_message(self, texte, user_id="default"):
+    async def traiter_message(self, texte, user_id="default", msg_date=None):
         import re
         from core.router import detecter_intention, executer_intention
         if not self.llm.historique:
@@ -107,7 +107,7 @@ class Agent:
                         return resultat, intention
                 except Exception as e:
                     log.warning(f"Erreur outil {intention}: {e}")
-        reponse, llm_utilise = self.llm.repondre(texte, user_id)
+        reponse, llm_utilise = self.llm.repondre(texte, user_id, msg_date=msg_date)
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
 
