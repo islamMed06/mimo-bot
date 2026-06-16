@@ -8,6 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from core.agent import Agent
+from core.llm import maintenant_algerie, _TELEGRAM_TIME_CACHE
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("BOT")
@@ -139,6 +140,10 @@ async def uptime(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"Actif depuis {h}h{m:02d}m{s:02d}s")
 
+async def cmd_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    now = maintenant_algerie()
+    await update.message.reply_text(f"Cache: {_TELEGRAM_TIME_CACHE[0]}\nHeure: {now.strftime('%H:%M:%S')}")
+
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package = " ".join(context.args) if context.args else ""
     if not package:
@@ -259,7 +264,7 @@ def lancer_bot():
                 CommandHandler("outils", outils), CommandHandler("status", status),
                 CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
                 CommandHandler("uptime", uptime),
-                CommandHandler("memoire", memoire), CommandHandler("installer", installer),
+                CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("installer", installer),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
     for h in handlers:
         app.add_handler(h)

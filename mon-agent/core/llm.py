@@ -10,12 +10,13 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 ALGERIA_TZ = timezone(timedelta(hours=1))
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _TELEGRAM_TIME_CACHE = [None]  # Dernier timestamp Telegram recu
 
 def maintenant_algerie():
     if _TELEGRAM_TIME_CACHE[0] is not None:
-        return datetime.fromtimestamp(_TELEGRAM_TIME_CACHE[0], tz=ALGERIA_TZ)
-    return datetime.now(timezone.utc).replace(tzinfo=timezone.utc).astimezone(ALGERIA_TZ)
+        return (_EPOCH + timedelta(seconds=_TELEGRAM_TIME_CACHE[0])).astimezone(ALGERIA_TZ)
+    return datetime.now(timezone.utc).astimezone(ALGERIA_TZ)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("LLM")
@@ -152,9 +153,13 @@ class LLMManager:
         system_prompt = self.get_system_prompt(user_message)
         if msg_date:
             try:
-                ts = msg_date.replace(tzinfo=timezone.utc).timestamp()
+                if msg_date.tzinfo is None:
+                    utc_dt = msg_date.replace(tzinfo=timezone.utc)
+                else:
+                    utc_dt = msg_date.astimezone(timezone.utc)
+                ts = (utc_dt - _EPOCH).total_seconds()
                 _TELEGRAM_TIME_CACHE[0] = ts
-                maintenant = datetime.fromtimestamp(ts, tz=ALGERIA_TZ)
+                maintenant = (_EPOCH + timedelta(seconds=ts)).astimezone(ALGERIA_TZ)
             except Exception as e:
                 log.warning(f"Erreur conversion msg_date: {e}")
                 maintenant = maintenant_algerie()
