@@ -276,10 +276,14 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
                 message = body.get("message", "")
                 user_id = body.get("user_id", "default")
 
-                async def _call():
-                    return await get_agent().traiter_message(message, user_id)
-
-                reponse, source = asyncio.run(_call())
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    reponse, source = loop.run_until_complete(
+                        get_agent().traiter_message(message, user_id)
+                    )
+                finally:
+                    loop.close()
                 self._json(200, {"response": reponse, "source": source})
             else:
                 self._json(404, {"error": "not found"})
