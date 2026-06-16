@@ -152,10 +152,9 @@ class LLMManager:
         system_prompt = self.get_system_prompt(user_message)
         if msg_date:
             try:
-                ts = msg_date.timestamp()
+                ts = msg_date.replace(tzinfo=timezone.utc).timestamp()
                 _TELEGRAM_TIME_CACHE[0] = ts
                 maintenant = datetime.fromtimestamp(ts, tz=ALGERIA_TZ)
-                log.info(f"Heure via Telegram: ts={ts}")
             except Exception as e:
                 log.warning(f"Erreur conversion msg_date: {e}")
                 maintenant = maintenant_algerie()
