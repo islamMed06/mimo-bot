@@ -147,7 +147,7 @@ class LLMManager:
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
         system_prompt = self.get_system_prompt(user_message)
-        maintenant = msg_date.astimezone(ALGERIA_TZ) if msg_date else maintenant_algerie()
+        maintenant = msg_date.replace(tzinfo=timezone.utc).astimezone(ALGERIA_TZ) if msg_date else maintenant_algerie()
         # Si l'utilisateur demande l'heure, on la recupere via API et on l'injecte
         est_heure = bool(re.search(r'(quelle heure|il est|heure|current time|what time|l.heure)', user_message.lower()))
         if est_heure:
