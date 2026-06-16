@@ -1,4 +1,4 @@
-import os, sys, time, logging, threading, gc, atexit, signal
+import os, sys, time, asyncio, logging, threading, gc, atexit, signal, json
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -202,6 +202,11 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     log.info(f"Identite Telegram sauvegardee: {nom_complet}")
     except Exception as e:
         log.warning(f"Erreur sauvegarde identite Telegram: {e}")
+    admin_tg = os.getenv("ADMIN_TELEGRAM_ID")
+    admin_supabase = os.getenv("ADMIN_SUPABASE_ID")
+    if admin_tg and admin_supabase and user_id == admin_tg:
+        log.info("Admin Telegram → Supabase ID mapping")
+        user_id = admin_supabase
     texte = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
@@ -269,12 +274,81 @@ def envoyer_rappels():
     except Exception as e:
         log.warning(f"Scheduler rappels: {type(e).__name__}: {e}")
 
-class SanteHandler(BaseHTTPRequestHandler):
+class AgentHTTPHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         envoyer_rappels()
-        self.send_response(200)
+        try:
+            if self.path in ("/", "/health"):
+                self._json(200, {"status": "ok"})
+            elif self.path.startswith("/history"):
+                from urllib.parse import urlparse, parse_qs
+                params = parse_qs(urlparse(self.path).query)
+                user_id = params.get("user_id", [None])[0]
+                if not user_id:
+                    self._json(400, {"error": "user_id required"})
+                    return
+                messages = get_agent().memory.charger_conversations_recentes(user_id)
+                self._json(200, {"messages": messages})
+            else:
+                self._json(404, {"error": "not found"})
+        except Exception as e:
+            log.error(f"GET /{self.path} error: {e}")
+            self._json(500, {"error": str(e)})
+
+    def do_POST(self):
+        try:
+            if self.path == "/chat":
+                length = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(length))
+                message = body.get("message", "")
+                user_id = body.get("user_id", "default")
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    reponse, source = loop.run_until_complete(
+                        get_agent().traiter_message(message, user_id)
+                    )
+                finally:
+                    loop.close()
+
+                admin_supabase = os.getenv("ADMIN_SUPABASE_ID")
+                admin_telegram = os.getenv("ADMIN_TELEGRAM_ID")
+                token = os.getenv("TELEGRAM_TOKEN")
+                if admin_supabase and admin_telegram and token and user_id == admin_supabase:
+                    try:
+                        import httpx
+                        text = f"\U0001f9d1\u200d\U0001f4bb Vous (Web) : {message}\n\n\U0001f916 MimoBot : {reponse}"
+                        httpx.post(
+                            f"https://api.telegram.org/bot{token}/sendMessage",
+                            json={"chat_id": admin_telegram, "text": text},
+                            timeout=10
+                        )
+                    except Exception as e:
+                        log.warning(f"Forward web -> Telegram: {e}")
+
+                self._json(200, {"response": reponse, "source": source})
+            else:
+                self._json(404, {"error": "not found"})
+        except Exception as e:
+            log.error(f"POST /{self.path} error: {e}")
+            self._json(500, {"error": str(e)})
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
-        self.wfile.write(b"OK")
+
+    def _json(self, status, data):
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
     def log_message(self, *a): pass
 
 def lancer_bot():
@@ -326,7 +400,7 @@ def lancer_bot():
 
 def demarrer_http(port):
     from http.server import HTTPServer
-    server = HTTPServer(("0.0.0.0", port), SanteHandler)
+    server = HTTPServer(("0.0.0.0", port), AgentHTTPHandler)
     server.serve_forever()
 
 def main():
