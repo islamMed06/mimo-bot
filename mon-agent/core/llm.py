@@ -84,8 +84,8 @@ class LLMManager:
                     max_tokens=300
                 )
                 resume = completion.choices[0].message.content
-                if self.memory:
-                    self.memory.sauvegarder_resume(resume)
+                if self.memory and user_id:
+                    self.memory.sauvegarder_resume(resume, user_id)
                 self.historique = self.historique[-self.config["memoire"]["court_terme_max_messages"]:]
                 self.historique.insert(0, {"role": "system", "content": f"[Resume conversation precedente] {resume}"})
                 log.info(f"Anciens messages resumes automatiquement ({len(anciens)} msgs -> resume)")

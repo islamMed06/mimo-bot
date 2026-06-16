@@ -61,7 +61,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Bonjour ! Je suis {nom}.\nUtilise /help pour les commandes.")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/uptime - Temps actif\n/diagnostic - Diagnostique\n/test_llm - Test LLM\n/memoire - Profil")
+    await update.message.reply_text("/start - Demarrer\n/help - Aide\n/outils - Outils\n/status - Etat\n/uptime - Temps actif\n/diagnostic - Diagnostique\n/test_llm - Test LLM\n/memoire - Profil\n/setname <nom> - Definir mon identite")
 
 async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
@@ -145,6 +145,18 @@ async def cmd_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = maintenant_algerie()
     await update.message.reply_text(f"Cache: {_TELEGRAM_TIME_CACHE[0]}\nHeure: {now.strftime('%H:%M:%S')}")
 
+async def setname(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nom = " ".join(context.args) if context.args else ""
+    if not nom:
+        await update.message.reply_text("Usage: /setname <votre nom>")
+        return
+    a = get_agent()
+    user_id = str(update.effective_user.id)
+    profil = a.memory.charger_profil(user_id)
+    profil["identite"] = f"L'utilisateur s'appelle {nom}."
+    a.memory.sauvegarder_profil(profil, user_id)
+    await update.message.reply_text(f"Identite sauvegardee : {nom}")
+
 async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     package = " ".join(context.args) if context.args else ""
     if not package:
@@ -175,6 +187,21 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.warning(f"Echec cache msg_date: {e}")
     envoyer_rappels()
     user_id = str(update.effective_user.id)
+    # Sauvegarder le nom Telegram comme identite si pas deja fait
+    try:
+        if update.effective_user:
+            prenom = (update.effective_user.first_name or "").strip()
+            nom_famille = (update.effective_user.last_name or "").strip()
+            nom_complet = f"{prenom} {nom_famille}".strip()
+            if nom_complet:
+                a = get_agent()
+                profil = a.memory.charger_profil(user_id)
+                if not profil.get("identite"):
+                    profil["identite"] = f"L'utilisateur s'appelle {nom_complet}."
+                    a.memory.sauvegarder_profil(profil, user_id)
+                    log.info(f"Identite Telegram sauvegardee: {nom_complet}")
+    except Exception as e:
+        log.warning(f"Erreur sauvegarde identite Telegram: {e}")
     texte = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
@@ -277,7 +304,7 @@ def lancer_bot():
                 CommandHandler("outils", outils), CommandHandler("status", status),
                 CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
                 CommandHandler("uptime", uptime),
-                CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("installer", installer),
+                CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("setname", setname), CommandHandler("installer", installer),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
     for h in handlers:
         app.add_handler(h)
