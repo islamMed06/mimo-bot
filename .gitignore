@@ -1,0 +1,14 @@
+.env
+.env.example
+*.json
+!mon-agent/config/config.json
+
+# site submodule
+site/
+
+# OS
+Thumbs.db
+.DS_Store
+
+prompt-agent.md
+recapitulatif-projet.md
