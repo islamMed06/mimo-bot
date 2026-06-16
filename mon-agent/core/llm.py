@@ -195,25 +195,22 @@ class LLMManager:
         self.historique.append({"role": "user", "content": user_message})
         if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
             self._resumer_anciens(user_id)
-        system_prompt = self.get_system_prompt(user_message)
         maintenant = maintenant_algerie()
         est_demande_heure = bool(re.search(r'(quelle heure|il est|l. heure? *$|current time|what time)', user_message.lower()))
         if est_demande_heure:
-            contexte_date = f"HEURE OFFICIELLE: {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). Reponds UNIQUEMENT avec cette heure EXACTE, sans commentaire, sans la modifier."
-        else:
-            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne l'heure que si l'utilisateur la demande."
+            texte = f"Il est {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}."
+            self.historique.append({"role": "assistant", "content": texte})
+            return texte, "system"
+        system_prompt = self.get_system_prompt(user_message)
+        contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne l'heure que si l'utilisateur la demande."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
         limite = self.config["memoire"]["court_terme_max_messages"]
-        # Inclure les messages system (resumes, profil) en filtrant les vieilles dates
         for msg in self.historique:
             if msg["role"] == "system":
                 if msg["content"].startswith("Auj:") or msg["content"].startswith("Contexte:"):
                     continue
                 messages.append(msg)
-        # Puis les messages user/assistant les plus recents
         recents = [m for m in self.historique if m["role"] != "system"]
-        if est_demande_heure:
-            recents = [m for m in recents if not (m["role"] == "assistant" and re.search(r'\b\d{1,2}:\d{2}\b', m["content"]))]
         for msg in recents[-limite:]:
             messages.append(msg)
         fallbacks = [
