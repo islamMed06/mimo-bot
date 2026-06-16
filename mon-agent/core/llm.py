@@ -165,7 +165,11 @@ class LLMManager:
                 maintenant = maintenant_algerie()
         else:
             maintenant = maintenant_algerie()
-        contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne l'heure que si l'utilisateur la demande."
+        est_demande_heure = bool(re.search(r'(quelle heure|il est|l. heure? *$|current time|what time)', user_message.lower()))
+        if est_demande_heure:
+            contexte_date = f"HEURE OFFICIELLE: {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} (Algerie UTC+1). Reponds UNIQUEMENT avec cette heure EXACTE, sans commentaire, sans la modifier."
+        else:
+            contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne l'heure que si l'utilisateur la demande."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
         limite = self.config["memoire"]["court_terme_max_messages"]
         # Inclure les messages system (resumes, profil) en filtrant les vieilles dates
