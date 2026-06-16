@@ -142,7 +142,23 @@ class LLMManager:
             log.warning(f"Erreur extraction identite: {e}")
         return None
 
+    def _heure_ntp(self):
+        try:
+            import socket, struct
+            client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            client.settimeout(3)
+            data = b'\x1b' + 47 * b'\x0'
+            client.sendto(data, ("pool.ntp.org", 123))
+            data, _ = client.recvfrom(1024)
+            client.close()
+            ts = struct.unpack("!12I", data)[10]
+            ts -= 2208988800
+            return datetime.fromtimestamp(ts, tz=ALGERIA_TZ).strftime("%H:%M")
+        except Exception:
+            return None
+
     def _heure_exacte(self):
+        # Essai 1: worldtimeapi.org
         try:
             import httpx
             r = httpx.get("http://worldtimeapi.org/api/timezone/Africa/Algiers", timeout=5)
@@ -151,6 +167,7 @@ class LLMManager:
                 return datetime.fromisoformat(dt.replace("Z", "+00:00")).astimezone(ALGERIA_TZ).strftime("%H:%M")
         except Exception:
             pass
+        # Essai 2: Date header HTTP
         try:
             import httpx
             for url in ["https://api.github.com", "https://google.com"]:
@@ -161,6 +178,10 @@ class LLMManager:
                     return dt.astimezone(ALGERIA_TZ).strftime("%H:%M")
         except Exception:
             pass
+        # Essai 3: NTP direct (contourne les proxys HTTP)
+        ntp = self._heure_ntp()
+        if ntp:
+            return ntp
         return None
 
     def repondre(self, user_message, user_id=None):
@@ -170,7 +191,7 @@ class LLMManager:
         system_prompt = self.get_system_prompt(user_message)
         maintenant = maintenant_algerie()
         # Si l'utilisateur demande l'heure, on la recupere via API et on l'injecte
-        est_heure = bool(re.search(r'(quelle heure|il est|heure actuelle|current time|what time)', user_message.lower()))
+        est_heure = bool(re.search(r'(quelle heure|il est|heure actuelle|current time|what time|l.heure|donne.moi l.heure)', user_message.lower()))
         if est_heure:
             h = self._heure_exacte()
             contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure exacte (Algerie): {h}" if h else f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}. Heure indisponible."
