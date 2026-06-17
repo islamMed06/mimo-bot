@@ -2,6 +2,7 @@ import os
 import json
 import re
 import time
+import gc
 import logging
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
@@ -239,6 +240,7 @@ class LLMManager:
             else:
                 texte = f"❌ LLM unavailable. Error: {erreur}. Check Render → Environment variables."
         self.historique.append({"role": "assistant", "content": texte})
+        gc.collect()
         return texte, self.llm_actif
 
     def _appeler_groq(self, messages, tentative=1):

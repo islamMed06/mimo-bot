@@ -199,6 +199,16 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.error(f"Erreur: {e}")
         await update.message.reply_text("Desole, une erreur s'est produite.")
 
+def _log_memory():
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    log.info(f"MEM: {line.strip()}")
+                    break
+    except Exception:
+        pass
+
 def keepalive():
     import httpx
     port = int(os.environ.get("PORT", 10000))
@@ -209,6 +219,7 @@ def keepalive():
         counter += 1
         envoyer_rappels()
         if counter % 8 == 0:
+            _log_memory()
             try:
                 resp = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
                 date_str = resp.headers.get("Date")
