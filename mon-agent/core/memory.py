@@ -90,19 +90,22 @@ class MemoryManager:
 
     def _sauvegarder_firebase(self, role, contenu, user_id):
         try:
+            import traceback
             maintenant = datetime.now(ALGERIA_TZ)
             session_id = maintenant.strftime("%Y-%m-%d")
             doc_ref = self.db.collection("conversations").document(user_id).collection("sessions").document(session_id)
-            doc_ref.set({
-                "messages": firestore.ArrayUnion([{
-                    "role": role,
-                    "contenu": contenu[:500],
-                    "timestamp": maintenant.isoformat()
-                }]),
-                "derniere_activite": maintenant.isoformat()
-            }, merge=True)
+            msg = {"role": role, "contenu": contenu[:500], "timestamp": maintenant.isoformat()}
+            doc = doc_ref.get()
+            if doc.exists:
+                data = doc.to_dict()
+                msgs = data.get("messages", [])
+                msgs.append(msg)
+                doc_ref.set({"messages": msgs, "derniere_activite": maintenant.isoformat()})
+            else:
+                doc_ref.set({"messages": [msg], "derniere_activite": maintenant.isoformat()})
+            log.info(f"Firebase: {role} message sauvegarde ({session_id})")
         except Exception as e:
-            log.warning(f"Erreur sauvegarde Firebase: {e}")
+            log.warning(f"Erreur sauvegarde Firebase: {traceback.format_exc()}")
 
     def charger_conversations_recentes(self, user_id="default", limit=40):
         if not self.db:
