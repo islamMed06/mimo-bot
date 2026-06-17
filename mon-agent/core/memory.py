@@ -93,49 +93,51 @@ class MemoryManager:
             import traceback
             maintenant = datetime.now(ALGERIA_TZ)
             session_id = maintenant.strftime("%Y-%m-%d")
-            doc_ref = self.db.collection("conversations").document(user_id).collection("sessions").document(session_id)
-            msg = {"role": role, "contenu": contenu[:500], "timestamp": maintenant.isoformat()}
-            doc = doc_ref.get()
-            if doc.exists:
-                data = doc.to_dict()
-                msgs = data.get("messages", [])
-                msgs.append(msg)
-                doc_ref.set({"messages": msgs, "derniere_activite": maintenant.isoformat()})
-            else:
-                doc_ref.set({"messages": [msg], "derniere_activite": maintenant.isoformat()})
-            log.info(f"Firebase: {role} message sauvegarde ({session_id})")
+            msg_ref = self.db.collection("conversations").document(user_id) \
+                .collection("sessions").document(session_id) \
+                .collection("messages").document()
+            msg_ref.set({
+                "role": role,
+                "contenu": contenu[:500],
+                "timestamp": maintenant.isoformat()
+            })
+            session_ref = self.db.collection("conversations").document(user_id) \
+                .collection("sessions").document(session_id)
+            session_ref.set({"derniere_activite": maintenant.isoformat()}, merge=True)
+            log.info(f"Firebase: {role} message saved ({session_id})")
         except Exception as e:
-            log.warning(f"Erreur sauvegarde Firebase: {traceback.format_exc()}")
+            log.warning(f"Firebase save error: {traceback.format_exc()}")
 
     def charger_conversations_recentes(self, user_id="default", limit=40):
         if not self.db:
             return []
         try:
-            sessions = list(self.db.collection("conversations").document(user_id).collection("sessions") \
+            sessions = list(self.db.collection("conversations").document(user_id).collection("sessions")
                 .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(2).get())
             messages = []
             for session in sessions:
-                data = session.to_dict()
-                if "messages" in data:
-                    for msg in data["messages"]:
-                        ts = msg.get("timestamp", "")
-                        date_prefix = ""
-                        if ts:
-                            try:
-                                d = ts[:10]
-                                aujourdhui = datetime.now(ALGERIA_TZ).date().isoformat()
-                                if d != aujourdhui:
-                                    date_prefix = f"[{d}] "
-                            except:
-                                pass
-                        messages.append({
-                            "role": msg.get("role", "assistant"),
-                            "content": date_prefix + msg.get("contenu", "")
-                        })
-            log.info(f"Charge historique: {len(messages)} messages depuis {len(sessions)} sessions")
+                sid = session.id
+                msgs = list(self.db.collection("conversations").document(user_id)
+                    .collection("sessions").document(sid)
+                    .collection("messages")
+                    .order_by("timestamp").get())
+                for msg_doc in msgs:
+                    data = msg_doc.to_dict()
+                    ts = data.get("timestamp", "")
+                    date_prefix = ""
+                    if ts:
+                        d = ts[:10]
+                        aujourdhui = datetime.now(ALGERIA_TZ).date().isoformat()
+                        if d != aujourdhui:
+                            date_prefix = f"[{d}] "
+                    messages.append({
+                        "role": data.get("role", "assistant"),
+                        "content": date_prefix + data.get("contenu", "")
+                    })
+            log.info(f"Loaded {len(messages)} msgs from {len(sessions)} sessions")
             return messages[-limit:]
         except Exception as e:
-            log.warning(f"Erreur chargement historique: {e}")
+            log.warning(f"Error loading history: {e}")
             return []
 
     def get_contexte(self, user_id="default"):
