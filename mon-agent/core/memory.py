@@ -99,6 +99,14 @@ class MemoryManager:
             if doc.exists:
                 data = doc.to_dict()
                 msgs = data.get("messages", [])
+                if not msgs:
+                    # backward compat: migrate any subcollection messages
+                    sub = list(self.db.collection("conversations").document(user_id)
+                        .collection("sessions").document(session_id)
+                        .collection("messages")
+                        .order_by("timestamp").get())
+                    if sub:
+                        msgs = [s.to_dict() for s in sub]
                 msgs.append(msg)
                 doc_ref.set({"messages": msgs, "derniere_activite": maintenant.isoformat()})
             else:
@@ -116,22 +124,31 @@ class MemoryManager:
             messages = []
             for session in sessions:
                 data = session.to_dict()
-                if "messages" in data:
-                    for msg in data["messages"]:
-                        ts = msg.get("timestamp", "")
-                        date_prefix = ""
-                        if ts:
-                            try:
-                                d = ts[:10]
-                                aujourdhui = datetime.now(ALGERIA_TZ).date().isoformat()
-                                if d != aujourdhui:
-                                    date_prefix = f"[{d}] "
-                            except:
-                                pass
-                        messages.append({
-                            "role": msg.get("role", "assistant"),
-                            "content": date_prefix + msg.get("contenu", "")
-                        })
+                sid = session.id
+                msgs_data = data.get("messages") if data else None
+                if msgs_data is None:
+                    # backward compat: session doc may have no "messages" field
+                    # (created by earlier subcollection format), check subcollection
+                    sub = list(self.db.collection("conversations").document(user_id)
+                        .collection("sessions").document(sid)
+                        .collection("messages")
+                        .order_by("timestamp").get())
+                    msgs_data = [s.to_dict() for s in sub]
+                for msg in msgs_data:
+                    ts = msg.get("timestamp", "")
+                    date_prefix = ""
+                    if ts:
+                        try:
+                            d = ts[:10]
+                            aujourdhui = datetime.now(ALGERIA_TZ).date().isoformat()
+                            if d != aujourdhui:
+                                date_prefix = f"[{d}] "
+                        except:
+                            pass
+                    messages.append({
+                        "role": msg.get("role", "assistant"),
+                        "content": date_prefix + msg.get("contenu", "")
+                    })
             log.info(f"Charge historique: {len(messages)} messages depuis {len(sessions)} sessions")
             return messages[-limit:]
         except Exception as e:
