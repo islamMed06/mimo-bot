@@ -17,9 +17,11 @@ class MeteoSkill:
         mots_vides = {"quelle", "est", "la", "le", "de", "pour", "sur", "ce", "cette",
                       "donne", "donnemoi", "s'il", "te", "plait", "stp", "svp", "quel",
                       "meteo", "météo", "weather", "dans", "du", "a", "moi",
-                      "exacte", "actuelle", "maintenant", "aujourdhui"}
-        # priorite 1: mot apres "à" ou "a " ou "de " ou "pour "
-        match = re.search(r'\b(?:à|a|de|pour|weather in)\s+(\w+)', texte, re.IGNORECASE)
+                      "exacte", "actuelle", "maintenant", "aujourdhui",
+                      "d'aujourd'hui", "d'aujourdhui", "d'hier", "demain",
+                      "temperature", "température"}
+        # priorite 1: mot apres "à/de/pour/d' /weather in"
+        match = re.search(r'\b(?:à|a|de|d\'|pour|weather in)\s*(\w+)', texte, re.IGNORECASE)
         if match:
             ville = match.group(1).lower()
             if ville not in mots_vides:
