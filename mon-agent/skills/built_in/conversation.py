@@ -8,7 +8,7 @@ class ConversationSkill:
         self.memory = memory
         self.mode_actif = False
 
-    async def executer(self, texte):
+    async def executer(self, texte, user_id=None):
         texte_lower = texte.lower()
 
         if any(cmd in texte_lower for cmd in ["active le chat", "mode libre", "chat mode", "conversation libre"]):

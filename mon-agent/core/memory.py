@@ -139,29 +139,36 @@ class MemoryManager:
             if len(contenu) > 500:
                 log.warning(f"Message tronque: {len(contenu)} chars → 500 (user={user_id})")
             msg = {"role": role, "contenu": contenu[:500], "timestamp": maintenant.isoformat()}
-            transaction = self.db.transaction()
-            self._sauvegarder_firebase_atomique(transaction, doc_ref, msg, user_id, session_id, maintenant)
+            self._sauvegarder_firebase_atomique(doc_ref, msg, user_id, session_id, maintenant)
             log.info(f"Firebase: {role} message sauvegarde ({session_id})")
         except Exception as e:
             log.warning(f"Erreur sauvegarde Firebase: {traceback.format_exc()}")
 
-    @firestore.transactional
-    def _sauvegarder_firebase_atomique(self, transaction, doc_ref, msg, user_id, session_id, maintenant):
-        doc = doc_ref.get(transaction=transaction)
-        if doc.exists:
-            data = doc.to_dict()
-            msgs = data.get("messages", [])
-            if not msgs:
-                sub = list(self.db.collection("conversations").document(user_id)
-                    .collection("sessions").document(session_id)
-                    .collection("messages")
-                    .order_by("timestamp").get())
-                if sub:
-                    msgs = [s.to_dict() for s in sub]
-            msgs.append(msg)
-            transaction.set(doc_ref, {"messages": msgs, "derniere_activite": maintenant.isoformat()})
-        else:
-            transaction.set(doc_ref, {"messages": [msg], "derniere_activite": maintenant.isoformat()})
+    def _sauvegarder_firebase_atomique(self, doc_ref, msg, user_id, session_id, maintenant, retry=3):
+        for t in range(retry):
+            try:
+                transaction = self.db.transaction()
+                doc = doc_ref.get(transaction=transaction)
+                if doc.exists:
+                    data = doc.to_dict()
+                    msgs = data.get("messages", [])
+                    if not msgs:
+                        sub = list(self.db.collection("conversations").document(user_id)
+                            .collection("sessions").document(session_id)
+                            .collection("messages")
+                            .order_by("timestamp").get())
+                        if sub:
+                            msgs = [s.to_dict() for s in sub]
+                    msgs.append(msg)
+                    transaction.set(doc_ref, {"messages": msgs, "derniere_activite": maintenant.isoformat()})
+                else:
+                    transaction.set(doc_ref, {"messages": [msg], "derniere_activite": maintenant.isoformat()})
+                transaction.commit()
+                return
+            except Exception as e:
+                if t == retry - 1:
+                    raise
+                log.warning(f"Retry {t+1}/{retry} sauvegarde Firebase: {e}")
 
     def charger_conversations_recentes(self, user_id="default", limit=40):
         if not self.db:
@@ -291,7 +298,8 @@ class MemoryManager:
         if not self.db:
             return {}
         try:
-            docs = self.db.collection("reminders").where("user_id", "==", user_id).stream()
+            from google.cloud.firestore_v1 import FieldFilter
+            docs = self.db.collection("reminders").where(filter=FieldFilter("user_id", "==", user_id)).stream()
             rappels = {}
             for d in docs:
                 data = d.to_dict()
@@ -324,10 +332,11 @@ class MemoryManager:
         if not self.db:
             return []
         try:
+            from google.cloud.firestore_v1 import FieldFilter
             maintenant = datetime.now(ALGERIA_TZ)
             docs = self.db.collection("reminders") \
-                .where("envoye", "==", False) \
-                .where("timestamp", "<=", maintenant.isoformat()) \
+                .where(filter=FieldFilter("envoye", "==", False)) \
+                .where(filter=FieldFilter("timestamp", "<=", maintenant.isoformat())) \
                 .limit(100) \
                 .stream()
             echus = []
