@@ -14,19 +14,26 @@ class MeteoSkill:
         return await self._meteo(ville)
 
     def _extraire_ville(self, texte):
-        # priorite 1: "à/météo weather in <Ville>"
-        match = re.search(r'(?:à|a |météo|meteo|weather in|de |pour )\s*(\w+)', texte, re.IGNORECASE)
+        mots_vides = {"quelle", "est", "la", "le", "de", "pour", "sur", "ce", "cette",
+                      "donne", "donnemoi", "s'il", "te", "plait", "stp", "svp", "quel",
+                      "meteo", "météo", "weather", "dans", "du", "a", "moi"}
+        # priorite 1: mot apres "à" ou "a " ou "de " ou "pour "
+        match = re.search(r'\b(?:à|a|de|pour|weather in)\s+(\w+)', texte, re.IGNORECASE)
         if match:
             ville = match.group(1).lower()
-            if ville not in ["quelle", "est", "la", "le", "de", "pour", "sur", "ce", "cette", "donne", "donne-moi", "s'il", "te", "plait", "s'il te plaît", "stp", "svp", "quel"]:
+            if ville not in mots_vides:
                 return ville.capitalize()
-        # priorite 2: dernier mot du texte si court
-        mots = texte.strip().split()
-        if len(mots) <= 4:
-            for m in reversed(mots):
-                m_clean = m.strip(",.!?")
-                if m_clean.lower() not in ["météo", "meteo", "weather", "donne", "moi", "la", "le", "de", "du", "à", "a", "s'il", "te", "plait", "stp", "svp"] and len(m_clean) > 2:
-                    return m_clean.capitalize()
+        # priorite 2: mot apres "meteo" ou "météo"
+        match = re.search(r'\b(?:météo|meteo)\s+(\w+)', texte, re.IGNORECASE)
+        if match:
+            ville = match.group(1).lower()
+            if ville not in mots_vides and len(ville) > 2:
+                return ville.capitalize()
+        # priorite 3: dernier mot significatif
+        mots = [m.strip(",.!?") for m in texte.strip().split() if len(m.strip(",.!?")) > 2]
+        for m in reversed(mots):
+            if m.lower() not in mots_vides:
+                return m.capitalize()
         return "Alger"
 
     async def _meteo(self, ville):
