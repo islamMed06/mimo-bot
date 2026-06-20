@@ -16,7 +16,8 @@ class MeteoSkill:
     def _extraire_ville(self, texte):
         mots_vides = {"quelle", "est", "la", "le", "de", "pour", "sur", "ce", "cette",
                       "donne", "donnemoi", "s'il", "te", "plait", "stp", "svp", "quel",
-                      "meteo", "météo", "weather", "dans", "du", "a", "moi"}
+                      "meteo", "météo", "weather", "dans", "du", "a", "moi",
+                      "exacte", "actuelle", "maintenant", "aujourdhui"}
         # priorite 1: mot apres "à" ou "a " ou "de " ou "pour "
         match = re.search(r'\b(?:à|a|de|pour|weather in)\s+(\w+)', texte, re.IGNORECASE)
         if match:

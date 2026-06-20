@@ -13,7 +13,7 @@ MOTS_CLEFS = {
     "site_web": ["site web", "utilisateur", "inscrit"],
     "recherche": ["cherche sur internet", "recherche google", "actualite", "search internet", "what is"],
     "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "package", "dependance"],
-    "meteo": ["meteo", "météo", "weather", "wttr"],
+    "meteo": ["meteo", "météo", "weather", "wttr", "temperature", "température", "degré"],
     "traduction": ["traduis", "traduit", "traduction", "translate"],
     "rappel": ["programme un rappel", "ajoute un rappel", "rappelle-moi", "rappelle moi", "crée un rappel", "liste mes rappels", "supprime rappel", "affiche mes rappels"],
     "conversation": []
