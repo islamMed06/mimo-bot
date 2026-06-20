@@ -332,17 +332,16 @@ class MemoryManager:
         if not self.db:
             return []
         try:
-            from google.cloud.firestore_v1 import FieldFilter
             maintenant = datetime.now(ALGERIA_TZ)
-            docs = self.db.collection("reminders") \
-                .where(filter=FieldFilter("envoye", "==", False)) \
-                .where(filter=FieldFilter("timestamp", "<=", maintenant.isoformat())) \
-                .limit(100) \
-                .stream()
+            maintenant_iso = maintenant.isoformat()
             echus = []
+            docs = self.db.collection("reminders").stream()
             for doc in docs:
                 data = doc.to_dict()
-                echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
+                if data.get("envoye") == False and data.get("timestamp", "") <= maintenant_iso:
+                    echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
+                    if len(echus) >= 100:
+                        break
             log.info(f"rappels_echus: {len(echus)} echus")
             return echus
         except Exception as e:
