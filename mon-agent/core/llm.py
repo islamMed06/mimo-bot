@@ -254,6 +254,7 @@ class LLMManager:
                 if msg and msg.tool_calls:
                     tc_list = [{
                         "id": tc.id,
+                        "type": "function",
                         "function": {"name": tc.function.name, "arguments": tc.function.arguments}
                     } for tc in msg.tool_calls]
                     content = msg.content or ""
