@@ -79,3 +79,47 @@ class TraducteurSkill:
         except Exception:
             # fallback: renvoyer le texte tel quel
             return f"Traduction ({source}→{cible}) : {texte}"
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "traducteur",
+                "description": "Traduire un texte d'une langue à une autre",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {
+                            "type": "string",
+                            "description": "Texte à traduire"
+                        },
+                        "target_lang": {
+                            "type": "string",
+                            "description": "Langue cible (ex: français, anglais, arabe, espagnol)"
+                        },
+                        "source_lang": {
+                            "type": "string",
+                            "description": "Langue source (optionnel, auto-détection par défaut)"
+                        }
+                    },
+                    "required": ["text", "target_lang"]
+                }
+            }
+        }
+
+    async def executer_args(self, text, target_lang="anglais", source_lang=None):
+        lang_map = {
+            "français": "fr", "francais": "fr", "french": "fr",
+            "anglais": "en", "english": "en",
+            "arabe": "ar", "arabic": "ar",
+            "espagnol": "es", "spanish": "es",
+            "allemand": "de", "german": "de",
+            "italien": "it", "italian": "it",
+            "turc": "tr", "turkish": "tr",
+        }
+        cible = lang_map.get(target_lang.lower(), "en")
+        source = "auto"
+        if source_lang:
+            source = lang_map.get(source_lang.lower(), "auto")
+        return await self._traduire(text, cible, source)

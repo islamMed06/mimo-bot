@@ -92,3 +92,48 @@ class RappelSkill:
         if self.memory.supprimer_rappel(self._user_id, match):
             return f"Rappel `{rid}` supprimé."
         return "Erreur lors de la suppression."
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "rappel",
+                "description": "Programmer, lister ou supprimer des rappels",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["programmer", "lister", "supprimer"],
+                            "description": "Action à effectuer"
+                        },
+                        "duree_minutes": {
+                            "type": "integer",
+                            "description": "Dans combien de minutes déclencher le rappel (pour programmer)"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Message du rappel (pour programmer)"
+                        },
+                        "id_suppression": {
+                            "type": "string",
+                            "description": "ID du rappel à supprimer (pour supprimer)"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }
+
+    async def executer_args(self, action, duree_minutes=None, message=None, id_suppression=None):
+        if action == "lister":
+            return await self.executer("liste mes rappels")
+        if action == "supprimer":
+            return await self.executer(f"supprime rappel {id_suppression}")
+        if action == "programmer":
+            texte = f"programme un rappel dans {duree_minutes} min"
+            if message:
+                texte += f" de {message}"
+            return await self.executer(texte)
+        return "Action non reconnue. Utilise programmer, lister ou supprimer."

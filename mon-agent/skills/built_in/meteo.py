@@ -13,29 +13,30 @@ class MeteoSkill:
         ville = self._extraire_ville(texte)
         return await self._meteo(ville)
 
+    STOP_WORDS = {
+        "quelle", "est", "la", "le", "les", "de", "du", "des", "pour", "sur", "ce", "cette",
+        "donne", "donne-moi", "s'il", "te", "plait", "s'il te plaît", "stp", "svp", "quel",
+        "meteo", "météo", "weather", "temperature", "température", "degré",
+        "d'aujourd'hui", "demain", "exacte", "actuelle", "maintenant"
+    }
+
     def _extraire_ville(self, texte):
-        mots_vides = {"quelle", "est", "la", "le", "de", "pour", "sur", "ce", "cette",
-                      "donne", "donnemoi", "s'il", "te", "plait", "stp", "svp", "quel",
-                      "meteo", "météo", "weather", "dans", "du", "a", "moi",
-                      "exacte", "actuelle", "maintenant", "aujourdhui",
-                      "d'aujourd'hui", "d'aujourdhui", "d'hier", "demain",
-                      "temperature", "température"}
-        # priorite 1: mot apres "à/de/pour/d' /weather in"
+        # priorite 1: mot apres "à/de/pour/d'/weather in"
         match = re.search(r'\b(?:à|a|de|d\'|pour|weather in)\s*(\w+)', texte, re.IGNORECASE)
         if match:
             ville = match.group(1).lower()
-            if ville not in mots_vides:
+            if ville not in self.STOP_WORDS:
                 return ville.capitalize()
         # priorite 2: mot apres "meteo" ou "météo"
         match = re.search(r'\b(?:météo|meteo)\s+(\w+)', texte, re.IGNORECASE)
         if match:
             ville = match.group(1).lower()
-            if ville not in mots_vides and len(ville) > 2:
+            if ville not in self.STOP_WORDS and len(ville) > 2:
                 return ville.capitalize()
         # priorite 3: dernier mot significatif
         mots = [m.strip(",.!?") for m in texte.strip().split() if len(m.strip(",.!?")) > 2]
         for m in reversed(mots):
-            if m.lower() not in mots_vides:
+            if m.lower() not in self.STOP_WORDS:
                 return m.capitalize()
         return "Alger"
 
@@ -74,3 +75,26 @@ class MeteoSkill:
         except Exception as e:
             log.warning(f"Erreur météo: {e}")
             return None
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "meteo",
+                "description": "Obtenir la météo actuelle d'une ville",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {
+                            "type": "string",
+                            "description": "Nom de la ville (ex: Alger, Paris, London)"
+                        }
+                    },
+                    "required": ["city"]
+                }
+            }
+        }
+
+    async def executer_args(self, city="Alger"):
+        return await self._meteo(city)

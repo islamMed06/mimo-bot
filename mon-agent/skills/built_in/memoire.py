@@ -8,3 +8,20 @@ class MemoireSkill:
 
     async def executer(self, texte):
         return "Voici ce que je sais de toi:\n" + self.memory.get_contexte()
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "memoire",
+                "description": "Afficher les informations connues sur l'utilisateur (profil, identité)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        }
+
+    async def executer_args(self):
+        return await self.executer("")

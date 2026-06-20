@@ -39,3 +39,26 @@ class RechercheWebSkill:
         except Exception as e:
             log.warning(f"Erreur recherche web: {e}")
             return None
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "recherche_web",
+                "description": "Effectuer une recherche sur Internet",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Termes de recherche"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+
+    async def executer_args(self, query):
+        return await self.rechercher(query)

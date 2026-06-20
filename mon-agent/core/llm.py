@@ -192,16 +192,7 @@ class LLMManager:
             log.warning(f"Erreur extraction identite: {e}")
         return None
 
-    def repondre(self, user_message, user_id=None, msg_date=None):
-        self.historique.append({"role": "user", "content": user_message})
-        if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
-            self._resumer_anciens(user_id)
-        maintenant = maintenant_algerie()
-        est_demande_heure = bool(re.search(r"(quelle heure|il est|l'?heure? *$|^heure? *$|current time|what time)", user_message.lower()))
-        if est_demande_heure:
-            texte = f"Il est {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}."
-            self.historique.append({"role": "assistant", "content": texte})
-            return texte, "system"
+    def _build_messages(self, user_message, maintenant):
         system_prompt = self.get_system_prompt(user_message)
         contexte_date = f"Auj: {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year} {maintenant.strftime('%H:%M')} (Algerie UTC+1). REGLE ABSOLUE: ne mentionne l'heure que si l'utilisateur la demande."
         messages = [{"role": "system", "content": system_prompt}, {"role": "system", "content": contexte_date}]
@@ -214,6 +205,10 @@ class LLMManager:
         recents = [m for m in self.historique if m["role"] != "system"]
         for msg in recents[-limite:]:
             messages.append(msg)
+        return messages
+
+    def _fallback_chain(self, messages, user_message):
+        texte = None
         fallbacks = [
             ("groq", self._appeler_groq),
             ("gemini", self._appeler_gemini),
@@ -231,38 +226,83 @@ class LLMManager:
             if texte:
                 self.llm_actif = nom
                 break
-            log.info(f"{nom} indisponible, fallback suivant...")
         if texte is None:
             erreurs_llm = [getattr(self, f"derniere_erreur_{n}", "") for n in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]]
             erreur = next((e for e in erreurs_llm if e), "cause inconnue")
-            if detecter_langue(user_message) == "fr":
+            if user_message and detecter_langue(user_message) == "fr":
                 texte = f"❌ LLM indisponible. Erreur: {erreur}. Vérifie les clés API dans Render → Environment."
             else:
                 texte = f"❌ LLM unavailable. Error: {erreur}. Check Render → Environment variables."
+        return texte
+
+    def repondre(self, user_message=None, user_id=None, msg_date=None, tools=None):
+        if user_message:
+            self.historique.append({"role": "user", "content": user_message})
+        if len(self.historique) > self.config["memoire"]["court_terme_max_messages"] * 2:
+            self._resumer_anciens(user_id)
+        maintenant = maintenant_algerie()
+        if user_message:
+            est_demande_heure = bool(re.search(r"(quelle heure|il est|l'?heure? *$|^heure? *$|current time|what time)", user_message.lower()))
+            if est_demande_heure:
+                texte = f"Il est {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}."
+                self.historique.append({"role": "assistant", "content": texte})
+                return texte, "system", None
+        messages = self._build_messages(user_message, maintenant)
+        if tools:
+            try:
+                msg = self._appeler_groq_raw(messages, tools=tools)
+                if msg and msg.tool_calls:
+                    tc_list = [{
+                        "id": tc.id,
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments}
+                    } for tc in msg.tool_calls]
+                    content = msg.content or ""
+                    entry = {"role": "assistant", "content": content, "tool_calls": tc_list}
+                    self.historique.append(entry)
+                    return content, self.llm_actif, tc_list
+                if msg:
+                    texte = msg.content or ""
+                    self.historique.append({"role": "assistant", "content": texte})
+                    gc.collect()
+                    return texte, self.llm_actif, None
+            except Exception as e:
+                log.warning(f"Groq outils echoue: {e}")
+        texte = self._fallback_chain(messages, user_message)
+        self.historique.append({"role": "assistant", "content": texte})
+        gc.collect()
+        return texte, self.llm_actif, None
+
+    def reformuler_avec_outil(self, user_id=None):
+        maintenant = maintenant_algerie()
+        messages = self._build_messages(None, maintenant)
+        texte = self._fallback_chain(messages, None)
         self.historique.append({"role": "assistant", "content": texte})
         gc.collect()
         return texte, self.llm_actif
 
-    def _appeler_groq(self, messages, tentative=1):
+    def _appeler_groq_raw(self, messages, tools=None, tentative=1):
         try:
             temps_attente = max(0, 2.0 - (time.time() - getattr(self, '_dernier_appel_groq', 0)))
             if temps_attente > 0:
                 time.sleep(temps_attente)
-            completion = self.groq_client.chat.completions.create(
-                model=self.config["llm"]["modele_groq"],
-                messages=messages,
-                max_tokens=self.config["llm"]["max_tokens"],
-                temperature=self.config["llm"]["temperature"]
-            )
+            kwargs = {
+                "model": self.config["llm"]["modele_groq"],
+                "messages": messages,
+                "max_tokens": self.config["llm"]["max_tokens"],
+                "temperature": self.config["llm"]["temperature"]
+            }
+            if tools:
+                kwargs["tools"] = tools
+            completion = self.groq_client.chat.completions.create(**kwargs)
             self._dernier_appel_groq = time.time()
-            return completion.choices[0].message.content
+            return completion.choices[0].message
         except RateLimitError:
             self._dernier_appel_groq = time.time()
             if tentative < 4:
                 duree = 2 ** tentative
                 log.warning(f"Rate limit Groq, attente {duree}s (tentative {tentative}/3)")
                 time.sleep(duree)
-                return self._appeler_groq(messages, tentative + 1)
+                return self._appeler_groq_raw(messages, tools, tentative + 1)
             err = "RateLimitError: limite atteinte apres 3 tentatives"
             log.warning(f"Erreur Groq: {err}")
             self.derniere_erreur_groq = err
@@ -272,6 +312,10 @@ class LLMManager:
             log.warning(f"Erreur Groq: {err}")
             self.derniere_erreur_groq = err
             return None
+
+    def _appeler_groq(self, messages, tentative=1):
+        msg = self._appeler_groq_raw(messages, tentative=tentative)
+        return msg.content if msg else None
 
     def _appeler_gemini(self, messages):
         try:

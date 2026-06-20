@@ -35,3 +35,31 @@ class CalendrierOutil:
 
     async def creer(self, titre, date, heure, description=""):
         return {"type": "confirmation", "action": "creer_evenement", "donnees": {"titre": titre, "date": date, "heure": heure, "description": description}}
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "calendrier",
+                "description": "Gérer le calendrier et les événements",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["lister", "semaine"],
+                            "description": "Action à effectuer sur le calendrier"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }
+
+    async def executer_args(self, action="lister"):
+        if action == "lister":
+            return self.lister_aujourdhui()
+        if action == "semaine":
+            return self.vue_semaine()
+        return "Calendrier: action non reconnue."

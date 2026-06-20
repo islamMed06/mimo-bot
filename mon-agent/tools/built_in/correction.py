@@ -15,3 +15,31 @@ class CorrectionOutil:
 
     async def corriger_feuille(self, chemin_fichier):
         return {"type": "analyse", "message": f"Analyse du fichier {chemin_fichier} en cours..."}
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "correction",
+                "description": "Corriger des exercices ou générer un corrigé type",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["corriger", "generer_corrige"],
+                            "description": "Action à effectuer"
+                        },
+                        "sujet": {
+                            "type": "string",
+                            "description": "Sujet de l'exercice (pour générer un corrigé)"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }
+
+    async def executer_args(self, action, sujet=None):
+        return await self.executer(f"{action} {sujet or ''}")

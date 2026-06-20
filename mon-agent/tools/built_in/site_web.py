@@ -42,3 +42,41 @@ class SiteWebOutil:
                 return f"Erreur site ({rep.status_code}): {rep.text}"
         except Exception as e:
             return f"Impossible de contacter le site: {e}"
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "site_web",
+                "description": "Interagir avec le site web (utilisateurs, statistiques)",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["liste_utilisateurs", "stats", "ajouter_utilisateur"],
+                            "description": "Action à effectuer"
+                        },
+                        "email": {
+                            "type": "string",
+                            "description": "Email de l'utilisateur"
+                        },
+                        "nom": {
+                            "type": "string",
+                            "description": "Nom de l'utilisateur"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }
+
+    async def executer_args(self, action, email=None, nom=None):
+        if action == "liste_utilisateurs":
+            return await self._api_call("GET", "/api/agent/users/list")
+        if action == "stats":
+            return await self._api_call("GET", "/api/agent/stats")
+        if action == "ajouter_utilisateur":
+            return "Pour ajouter un utilisateur, donne-moi son email et son nom. Je confirme avant."
+        return "Site web: action non reconnue."

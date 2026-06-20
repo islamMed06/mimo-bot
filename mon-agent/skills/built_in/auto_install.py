@@ -25,3 +25,26 @@ class AutoInstallSkill:
             return f"Erreur installation '{package}': {resultat.stderr}"
         except Exception as e:
             return f"Erreur: {e}"
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "auto_install",
+                "description": "Installer un package Python",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "package": {
+                            "type": "string",
+                            "description": "Nom du package Python à installer"
+                        }
+                    },
+                    "required": ["package"]
+                }
+            }
+        }
+
+    async def executer_args(self, package):
+        return await self.installer(package)

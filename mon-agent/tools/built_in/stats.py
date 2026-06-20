@@ -45,3 +45,37 @@ class StatsOutil:
         except Exception as e:
             log.warning(f"Erreur generation graphique: {e}")
             return None
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "stats",
+                "description": "Voir les statistiques, moyennes ou générer un graphique pour une classe",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["moyenne", "graphique", "rapport"],
+                            "description": "Type de statistique à afficher"
+                        },
+                        "classe": {
+                            "type": "string",
+                            "description": "Nom de la classe"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }
+
+    async def executer_args(self, action, classe=None):
+        if action == "graphique":
+            return "Pour générer un graphique, donne-moi la classe à analyser."
+        if action == "moyenne":
+            return "Donne-moi le nom de la classe pour voir les statistiques."
+        if action == "rapport":
+            return "Donne-moi la classe pour générer un rapport."
+        return "Stats: action non reconnue."

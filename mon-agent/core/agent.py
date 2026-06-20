@@ -72,6 +72,16 @@ class Agent:
         outils_mcp = mcp_loader.charger()
         self.outils.update(outils_mcp)
 
+    def _build_tool_schemas(self):
+        schemas = []
+        for nom, outil in self.outils.items():
+            if hasattr(outil, 'get_function_schema'):
+                try:
+                    schemas.append(outil.get_function_schema())
+                except Exception as e:
+                    log.warning(f"Schema {nom} ignoré: {e}")
+        return schemas if schemas else None
+
     async def traiter_message(self, texte, user_id="default", msg_date=None):
         import re
         from core.router import detecter_intention, executer_intention
@@ -93,8 +103,41 @@ class Agent:
                 profil["identite"] = f"L'utilisateur s'appelle {nom}."
                 self.memory.sauvegarder_profil(profil, user_id)
                 log.info(f"Identite definie via phrase: {nom}")
+        # Fonction calling: LLM decide quel outil appeler
+        schemas = self._build_tool_schemas()
+        reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, msg_date=msg_date, tools=schemas)
+        if tool_calls:
+            log.info(f"Tool calls: {[tc['function']['name'] for tc in tool_calls]}")
+            for tc in tool_calls:
+                func_name = tc["function"]["name"]
+                try:
+                    args = json.loads(tc["function"]["arguments"])
+                except Exception:
+                    args = {}
+                outil = self.outils.get(func_name)
+                if outil and hasattr(outil, 'executer_args'):
+                    try:
+                        resultat = await outil.executer_args(**args)
+                    except Exception as e:
+                        resultat = f"Erreur outil {func_name}: {e}"
+                elif outil and hasattr(outil, 'executer'):
+                    try:
+                        resultat = await outil.executer(texte)
+                    except Exception as e:
+                        resultat = f"Erreur outil {func_name}: {e}"
+                else:
+                    resultat = f"Outil {func_name} non disponible."
+                self.llm.historique.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": str(resultat)
+                })
+            reponse, llm_utilise = self.llm.reformuler_avec_outil(user_id)
+            self.memory.ajouter_message("assistant", reponse, user_id)
+            return reponse, llm_utilise
+        # Fallback: keyword router si le LLM n'a pas utilise d'outil
         intention = detecter_intention(texte)
-        log.info(f"Intention detectee: {intention}")
+        log.info(f"Intention detectee (fallback): {intention}")
         outil = executer_intention(intention, texte, self.outils)
         if outil:
             est_question = bool(re.search(r'\b(si|est-ce que|peux.tu|es.tu|vas.tu|qu-est-ce|comment)\b', texte.lower())) and '?' in texte
@@ -108,7 +151,6 @@ class Agent:
                         return resultat, intention
                 except Exception as e:
                     log.warning(f"Erreur outil {intention}: {e}")
-        reponse, llm_utilise = self.llm.repondre(texte, user_id, msg_date=msg_date)
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
 

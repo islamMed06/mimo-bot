@@ -25,3 +25,33 @@ class ConversationSkill:
             return None  # laisse le LLM gérer
 
         return None
+
+    @staticmethod
+    def get_function_schema():
+        return {
+            "type": "function",
+            "function": {
+                "name": "conversation",
+                "description": "Activer ou désactiver le mode conversation libre",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["activer", "desactiver"],
+                            "description": "Activer ou désactiver le mode libre"
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        }
+
+    async def executer_args(self, action):
+        if action == "activer":
+            self.mode_actif = True
+            return "Mode conversation libre activé ! Je suis plus détendu et créatif."
+        if action == "desactiver":
+            self.mode_actif = False
+            return "Mode normal réactivé."
+        return "Conversation: action non reconnue."
