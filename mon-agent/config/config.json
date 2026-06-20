@@ -9,7 +9,7 @@
   "llm": {
     "principal": "groq",
     "fallback": "gemini",
-    "modele_groq": "llama-3.3-70b-specdec",
+    "modele_groq": "openai/gpt-oss-120b",
     "modele_gemini": "gemini-2.0-flash",
     "modele_openrouter": "meta-llama/llama-3.3-70b-instruct:free",
     "modele_huggingface": "microsoft/Phi-3-mini-4k-instruct",
