@@ -4,15 +4,8 @@ import logging
 log = logging.getLogger("ROUTER")
 
 MOTS_CLEFS = {
-    "calendrier": ["calendrier", "agenda", "evenement", "rendez-vous"],
-    "email": ["email", "mail", "courriel", "boite mail", "boîte mail", "envoyer email", "envoyer mail", "lire email", "lire mail", "lire mes emails", "lire mes mails"],
-    "correction": ["corrige", "correction", "corriger", "feuille", "exercice", "devoir"],
-    "notes": ["note", "eleve", "moyenne", "classe", "student", "grade", "average"],
-    "fiches": ["fiche", "lecon", "cours", "examen", "lesson", "worksheet"],
-    "stats": ["statistique", "graphique", "progression", "rapport", "stats", "chart"],
     "site_web": ["site web", "utilisateur", "inscrit"],
     "recherche": ["cherche sur internet", "recherche google", "actualite", "search internet", "what is"],
-    "installation": ["installe", "installer", "ajoute outil", "nouvel outil", "package", "dependance"],
     "meteo": ["meteo", "météo", "weather", "wttr", "temperature", "température", "degré"],
     "traduction": ["traduis", "traduit", "traduction", "translate"],
     "rappel": ["programme un rappel", "ajoute un rappel", "rappelle-moi", "rappelle moi", "crée un rappel", "liste mes rappels", "supprime rappel", "affiche mes rappels"],
@@ -21,7 +14,6 @@ MOTS_CLEFS = {
 
 EXCLUSIONS = {
     "rappel": [r'\btu te rappelles?\b', r'\bvous (vous )?rappelles?\b', r'\bse rappelle\b', r'\bse souvenir\b', r'\bte souviens.tu\b', r'\ben rappelle\b', r'\bje me rappelle\b', r'\bne .* rappelle pas\b'],
-    "calendrier": [r'\bquelle date\b', r'\bquel jour\b', r'\bdate du jour\b', r'\bc est quand\b']
 }
 
 def detecter_intention(texte):
@@ -42,30 +34,15 @@ def detecter_intention(texte):
     return intention_principale
 
 def executer_intention(intention, texte, outils):
-    if intention == "calendrier":
-        return outils.get("calendrier", None)
-    elif intention == "email":
-        return outils.get("email", None)
-    elif intention == "correction":
-        return outils.get("correction", None)
-    elif intention == "notes":
-        return outils.get("notes", None)
-    elif intention == "fiches":
-        return outils.get("fiches", None)
-    elif intention == "stats":
-        return outils.get("stats", None)
-    elif intention == "site_web":
-        return outils.get("site_web", None)
-    elif intention == "recherche":
-        return outils.get("recherche_web", None)
-    elif intention == "installation":
-        return outils.get("auto_install", None)
-    elif intention == "meteo":
-        return outils.get("meteo", None)
-    elif intention == "traduction":
-        return outils.get("traducteur", None)
-    elif intention == "rappel":
-        return outils.get("rappel", None)
-    elif intention == "conversation":
-        return outils.get("conversation", None)
+    mapping = {
+        "site_web": "site_web",
+        "recherche": "recherche_web",
+        "meteo": "meteo",
+        "traduction": "traducteur",
+        "rappel": "rappel",
+        "conversation": "conversation",
+    }
+    nom_outil = mapping.get(intention)
+    if nom_outil:
+        return outils.get(nom_outil, None)
     return None

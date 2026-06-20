@@ -21,8 +21,8 @@ class MeteoSkill:
     }
 
     def _extraire_ville(self, texte):
-        # priorite 1: mot apres "à/de/pour/d'/weather in"
-        match = re.search(r'\b(?:à|a|de|d\'|pour|weather in)\s*(\w+)', texte, re.IGNORECASE)
+        # priorite 1: mot apres "à/de/d'/pour/weather in"
+        match = re.search(r'\b(?:à\s+|de\s+|d\'|pour\s+|weather in)\s*(\w+)', texte, re.IGNORECASE)
         if match:
             ville = match.group(1).lower()
             if ville not in self.STOP_WORDS:

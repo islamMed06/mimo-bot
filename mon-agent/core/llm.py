@@ -98,25 +98,25 @@ class LLMManager:
         langue = "fr"
         if user_message:
             langue = detecter_langue(user_message)
-        base_fr = (
-            f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome. "
-            f"Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile. "
-            f"Tu utilises Groq, Gemini, OpenRouter, HuggingFace, Cloudflare ou GitHub Models comme LLM (fallback automatique). "
-            f"Tu disposes d'outils pour la gestion du calendrier, des emails, des notes élèves, des fiches de leçons, "
-            f"des statistiques, de la correction d'exercices et du contrôle du site web. "
-            f"Tu confirmes toujours avant les actions sensibles (création, modification, envoi, installation). "
-            f"Tu n'effectues jamais seul des actions de suppression en masse ou de partage de données privées."
-        )
-        base_en = (
-            f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant. "
-            f"Always reply in the user's language. Be concise, clear, and helpful. "
-            f"You use Groq, Gemini, OpenRouter, HuggingFace, Cloudflare or GitHub Models as LLM (auto fallback). "
-            f"You have tools for calendar management, emails, student grades, lesson plans, "
-            f"statistics, exercise correction, and website control. "
-            f"You always confirm before sensitive actions (create, modify, send, install). "
-            f"You never perform mass deletions or private data sharing on your own."
-        )
-        return base_en if langue == "en" else base_fr
+        lignes = {
+            "fr": [
+                f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome.",
+                "Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile.",
+                "Tu utilises Groq, Gemini, OpenRouter, HuggingFace, Cloudflare ou GitHub Models comme LLM (fallback automatique).",
+                "Tu disposes d'outils pour la météo, la traduction, la recherche web, les rappels, et le contrôle du site web.",
+                "Tu confirmes toujours avant les actions sensibles (création, modification, envoi).",
+                "Tu n'effectues jamais seul des actions de suppression en masse ou de partage de données privées.",
+            ],
+            "en": [
+                f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant.",
+                "Always reply in the user's language. Be concise, clear, and helpful.",
+                "You use Groq, Gemini, OpenRouter, HuggingFace, Cloudflare or GitHub Models as LLM (auto fallback).",
+                "You have tools for weather, translation, web search, reminders, and website control.",
+                "You always confirm before sensitive actions (create, modify, send).",
+                "You never perform mass deletions or private data sharing on your own.",
+            ],
+        }
+        return " ".join(lignes.get(langue, lignes["fr"]))
 
     def _resumer_anciens(self, user_id=None):
         anciens = self.historique[:-self.config["memoire"]["court_terme_max_messages"]]
@@ -169,11 +169,15 @@ class LLMManager:
             return False
         return True
 
-    def _extraire_identite(self, user_id, messages=None):
+    def _extraire_identite(self, user_id, messages=None, resume=None):
         try:
             if not messages:
                 messages = self.historique[-40:]
-            texte = "\n".join([f"{m['role']}: {m['content'][:300]}" for m in messages])
+            texte_parts = []
+            if resume:
+                texte_parts.append(f"[Resume conversation]: {resume[:500]}")
+            texte_parts.append("\n".join([f"{m['role']}: {m['content'][:300]}" for m in messages]))
+            texte = "\n".join(texte_parts)
             comp = self.groq_client.chat.completions.create(
                 model=self.config["llm"]["modele_groq"],
                 messages=[{"role": "system", "content": "Extrais les infos personnelles de l'utilisateur (nom, profession, role, preferences). Reponds en 1 phrase max. Si aucune info, reponds 'RIEN'."},
@@ -262,15 +266,14 @@ class LLMManager:
                     self.historique.append(entry)
                     return content, self.llm_actif, tc_list
                 if msg:
-                    texte = msg.content or ""
-                    self.historique.append({"role": "assistant", "content": texte})
-                    gc.collect()
-                    return texte, self.llm_actif, None
+                    texte = msg.content
+                    if texte:
+                        self.historique.append({"role": "assistant", "content": texte})
+                        return texte, self.llm_actif, None
             except Exception as e:
                 log.warning(f"Groq outils echoue: {e}")
         texte = self._fallback_chain(messages, user_message)
         self.historique.append({"role": "assistant", "content": texte})
-        gc.collect()
         return texte, self.llm_actif, None
 
     def reformuler_avec_outil(self, user_id=None):
@@ -320,15 +323,17 @@ class LLMManager:
 
     def _appeler_gemini(self, messages):
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=self.gemini_key)
+            from google import genai
+            client = genai.Client(api_key=self.gemini_key)
             system_msg = messages[0]["content"]
             user_msgs = [m["content"] for m in messages[1:]]
             prompt = f"{system_msg}\n\n" + "\n".join(user_msgs)
-            model = genai.GenerativeModel(self.config["llm"]["modele_gemini"])
-            reponse = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=self.config["llm"]["modele_gemini"],
+                contents=prompt
+            )
             import gc; gc.collect()
-            return reponse.text
+            return response.text
         except Exception as e:
             err = f"{type(e).__name__}: {str(e)[:150]}"
             log.warning(f"Erreur Gemini: {err}")

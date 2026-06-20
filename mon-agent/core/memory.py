@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -8,12 +9,29 @@ from firebase_admin import credentials, firestore
 ALGERIA_TZ = timezone(timedelta(hours=1))
 log = logging.getLogger("MEMORY")
 
+class ProfileCache:
+    def __init__(self, ttl=60):
+        self._cache = {}
+        self._ttl = ttl
+
+    def get(self, user_id, loader):
+        entry = self._cache.get(user_id)
+        if entry and datetime.now().timestamp() - entry["ts"] < self._ttl:
+            return entry["profil"]
+        profil = loader(user_id)
+        self._cache[user_id] = {"profil": profil, "ts": datetime.now().timestamp()}
+        return profil
+
+    def invalidate(self, user_id):
+        self._cache.pop(user_id, None)
+
 class MemoryManager:
     def __init__(self, config):
         self.config = config
-        self.court_terme = []
+        self.court_terme = {}
         self.court_terme_max = config["memoire"]["court_terme_max_messages"]
         self.db = None
+        self._cache_profil = ProfileCache(ttl=60)
         self._init_firebase()
 
     def _init_firebase(self):
@@ -44,22 +62,23 @@ class MemoryManager:
 
     def ajouter_message(self, role, contenu, user_id="default"):
         maintenant = datetime.now(ALGERIA_TZ)
-        self.court_terme.append({
+        self.court_terme.setdefault(user_id, []).append({
             "role": role,
             "contenu": contenu,
             "timestamp": maintenant.isoformat()
         })
-        if len(self.court_terme) > self.court_terme_max:
-            self._compresser_court_terme()
+        if len(self.court_terme[user_id]) > self.court_terme_max:
+            self._compresser_court_terme(user_id)
         if self.db:
             self._sauvegarder_firebase(role, contenu, user_id)
 
-    def _compresser_court_terme(self):
-        if len(self.court_terme) < 3:
+    def _compresser_court_terme(self, user_id):
+        msgs = self.court_terme.get(user_id, [])
+        if len(msgs) < 3:
             return
-        resume = self._generer_resume(self.court_terme[:-5])
-        self.court_terme = self.court_terme[-5:]
-        self.court_terme.insert(0, {"role": "resume", "contenu": resume, "timestamp": datetime.now(ALGERIA_TZ).isoformat()})
+        resume = self._generer_resume(msgs[:-self.court_terme_max])
+        self.court_terme[user_id] = msgs[-self.court_terme_max:]
+        self.court_terme[user_id].insert(0, {"role": "resume", "contenu": resume, "timestamp": datetime.now(ALGERIA_TZ).isoformat()})
 
     def _generer_resume(self, messages):
         sujets = []
@@ -83,10 +102,33 @@ class MemoryManager:
         try:
             doc = self.db.collection("conversations").document(user_id).collection("resumes").document("dernier").get()
             if doc.exists:
-                return doc.to_dict().get("resume")
+                data = doc.to_dict()
+                resume = data.get("resume")
+                ts = data.get("timestamp", "")
+                return resume, ts[:10] if ts else None
         except Exception as e:
             log.warning(f"Erreur chargement resume: {e}")
         return None
+
+    def charger_session_du_jour(self, user_id="default"):
+        if not self.db:
+            return []
+        aujourdhui = datetime.now(ALGERIA_TZ).strftime("%Y-%m-%d")
+        try:
+            doc = self.db.collection("conversations").document(user_id).collection("sessions").document(aujourdhui).get()
+            if doc.exists:
+                data = doc.to_dict()
+                msgs = data.get("messages", []) if data else []
+                if msgs is None:
+                    sub = list(self.db.collection("conversations").document(user_id)
+                        .collection("sessions").document(aujourdhui)
+                        .collection("messages").order_by("timestamp").get())
+                    msgs = [s.to_dict() for s in sub]
+                return [{"role": m.get("role", "assistant"), "content": m.get("contenu", "")} for m in msgs]
+            return []
+        except Exception as e:
+            log.warning(f"Erreur chargement session du jour: {e}")
+            return []
 
     def _sauvegarder_firebase(self, role, contenu, user_id):
         try:
@@ -94,33 +136,40 @@ class MemoryManager:
             maintenant = datetime.now(ALGERIA_TZ)
             session_id = maintenant.strftime("%Y-%m-%d")
             doc_ref = self.db.collection("conversations").document(user_id).collection("sessions").document(session_id)
+            if len(contenu) > 500:
+                log.warning(f"Message tronque: {len(contenu)} chars → 500 (user={user_id})")
             msg = {"role": role, "contenu": contenu[:500], "timestamp": maintenant.isoformat()}
-            doc = doc_ref.get()
-            if doc.exists:
-                data = doc.to_dict()
-                msgs = data.get("messages", [])
-                if not msgs:
-                    # backward compat: migrate any subcollection messages
-                    sub = list(self.db.collection("conversations").document(user_id)
-                        .collection("sessions").document(session_id)
-                        .collection("messages")
-                        .order_by("timestamp").get())
-                    if sub:
-                        msgs = [s.to_dict() for s in sub]
-                msgs.append(msg)
-                doc_ref.set({"messages": msgs, "derniere_activite": maintenant.isoformat()})
-            else:
-                doc_ref.set({"messages": [msg], "derniere_activite": maintenant.isoformat()})
+            transaction = self.db.transaction()
+            self._sauvegarder_firebase_atomique(transaction, doc_ref, msg, user_id, session_id, maintenant)
             log.info(f"Firebase: {role} message sauvegarde ({session_id})")
         except Exception as e:
             log.warning(f"Erreur sauvegarde Firebase: {traceback.format_exc()}")
+
+    @firestore.transactional
+    def _sauvegarder_firebase_atomique(self, transaction, doc_ref, msg, user_id, session_id, maintenant):
+        doc = doc_ref.get(transaction=transaction)
+        if doc.exists:
+            data = doc.to_dict()
+            msgs = data.get("messages", [])
+            if not msgs:
+                sub = list(self.db.collection("conversations").document(user_id)
+                    .collection("sessions").document(session_id)
+                    .collection("messages")
+                    .order_by("timestamp").get())
+                if sub:
+                    msgs = [s.to_dict() for s in sub]
+            msgs.append(msg)
+            transaction.set(doc_ref, {"messages": msgs, "derniere_activite": maintenant.isoformat()})
+        else:
+            transaction.set(doc_ref, {"messages": [msg], "derniere_activite": maintenant.isoformat()})
 
     def charger_conversations_recentes(self, user_id="default", limit=40):
         if not self.db:
             return []
         try:
+            session_limit = max(1, min(10, limit // 20))
             sessions = list(self.db.collection("conversations").document(user_id).collection("sessions") \
-                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(2).get())
+                .order_by("derniere_activite", direction=firestore.Query.DESCENDING).limit(session_limit).get())
             messages = []
             for session in sessions:
                 data = session.to_dict()
@@ -143,7 +192,7 @@ class MemoryManager:
                             aujourdhui = datetime.now(ALGERIA_TZ).date().isoformat()
                             if d != aujourdhui:
                                 date_prefix = f"[{d}] "
-                        except:
+                        except (ValueError, TypeError):
                             pass
                     messages.append({
                         "role": msg.get("role", "assistant"),
@@ -157,7 +206,7 @@ class MemoryManager:
 
     def get_contexte(self, user_id="default"):
         contexte = []
-        for m in self.court_terme:
+        for m in self.court_terme.get(user_id, []):
             contexte.append(f"{m['role']}: {m['contenu']}")
         return "\n".join(contexte)
 
@@ -165,11 +214,20 @@ class MemoryManager:
         if not self.db:
             return 0
         try:
-            sessions = list(self.db.collection("conversations").document(user_id).collection("sessions").get())
+            sessions = list(self.db.collection("conversations").document(user_id).collection("sessions").select([]).get())
             return len(sessions)
         except Exception as e:
             log.warning(f"Erreur comptage sessions: {e}")
             return -1
+
+    @staticmethod
+    def resoudre_user_id(user_id_telegram):
+        admin_tg = os.getenv("ADMIN_TELEGRAM_ID")
+        admin_supabase = os.getenv("ADMIN_SUPABASE_ID")
+        if admin_tg and admin_supabase and user_id_telegram == admin_tg:
+            log.info("Admin Telegram → Supabase ID mapping")
+            return admin_supabase
+        return user_id_telegram
 
     def test_lecture_ecriture(self, user_id="default"):
         if not self.db:
@@ -186,6 +244,9 @@ class MemoryManager:
             return f"Erreur test Firebase: {e}"
 
     def charger_profil(self, user_id="default"):
+        return self._cache_profil.get(user_id, self._charger_profil_firestore)
+
+    def _charger_profil_firestore(self, user_id):
         if not self.db:
             return self._profil_par_defaut()
         try:
@@ -208,6 +269,7 @@ class MemoryManager:
             return
         try:
             self.db.collection("user_profile").document(user_id).set(profil, merge=True)
+            self._cache_profil.invalidate(user_id)
         except Exception as e:
             log.warning(f"Erreur sauvegarde profil: {e}")
 
@@ -216,8 +278,7 @@ class MemoryManager:
         if not self.db:
             return None
         try:
-            from datetime import datetime
-            doc_id = datetime.now().strftime("%Y%m%d%H%M%S%f")
+            doc_id = uuid4().hex
             data = {"user_id": user_id, "message": message, "timestamp": timestamp_iso,
                     "cree_le": datetime.now(ALGERIA_TZ).isoformat(), "envoye": False}
             self.db.collection("reminders").document(doc_id).set(data)
@@ -230,7 +291,6 @@ class MemoryManager:
         if not self.db:
             return {}
         try:
-            filt = "envoye" if actifs else "user_id"
             docs = self.db.collection("reminders").where("user_id", "==", user_id).stream()
             rappels = {}
             for d in docs:
@@ -248,6 +308,12 @@ class MemoryManager:
         if not self.db:
             return False
         try:
+            doc = self.db.collection("reminders").document(doc_id).get()
+            if not doc.exists:
+                return False
+            if doc.to_dict().get("user_id") != user_id:
+                log.warning(f"Tentative suppression rappel {doc_id} par user {user_id} non proprietaire")
+                return False
             self.db.collection("reminders").document(doc_id).delete()
             return True
         except Exception as e:
@@ -259,13 +325,15 @@ class MemoryManager:
             return []
         try:
             maintenant = datetime.now(ALGERIA_TZ)
-            docs = self.db.collection("reminders").where("envoye", "==", False).stream()
+            docs = self.db.collection("reminders") \
+                .where("envoye", "==", False) \
+                .where("timestamp", "<=", maintenant.isoformat()) \
+                .limit(100) \
+                .stream()
             echus = []
             for doc in docs:
                 data = doc.to_dict()
-                ts_str = data.get("timestamp", "")
-                if ts_str and datetime.fromisoformat(ts_str) <= maintenant:
-                    echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
+                echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
             log.info(f"rappels_echus: {len(echus)} echus")
             return echus
         except Exception as e:
@@ -276,6 +344,12 @@ class MemoryManager:
         if not self.db:
             return
         try:
+            doc = self.db.collection("reminders").document(doc_id).get()
+            if not doc.exists:
+                return
+            if doc.to_dict().get("user_id") != user_id:
+                log.warning(f"Tentative marquage rappel {doc_id} par user {user_id} non proprietaire")
+                return
             self.db.collection("reminders").document(doc_id).update({"envoye": True})
         except Exception as e:
             log.warning(f"Erreur marquage rappel: {e}")

@@ -1,16 +1,7 @@
 python-telegram-bot>=20.0
 groq
-google-generativeai
+google-genai
 firebase-admin
 supabase
 python-dotenv
 httpx
-pydantic
-matplotlib
-pandas
-openpyxl
-pillow
-pypdf2
-reportlab
-aiohttp
-asyncio

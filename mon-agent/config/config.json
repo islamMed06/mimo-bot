@@ -16,42 +16,36 @@
     "modele_cloudflare": "@cf/meta/llama-3.2-3b-instruct",
     "modele_github": "gpt-4o-mini",
     "max_tokens": 2048,
-    "temperature": 0.7
+    "temperature": 0.7,
+    "noms_affichage": {
+      "groq": "gpt-oss-120b",
+      "gemini": "gemini-2.0-flash",
+      "openrouter": "llama-3.3-70b",
+      "huggingface": "phi-3",
+      "cloudflare": "llama-3.2-3b",
+      "github": "gpt-4o-mini"
+    }
   },
     "tools": {
       "built_in": {
-        "calendrier": true,
-        "email": true,
-        "correction": true,
-        "notes": true,
-        "fiches": true,
-        "stats": true,
         "site_web": true,
         "recherche_web": true,
-        "auto_install": true,
         "memoire": true,
         "meteo": true,
         "traducteur": true,
         "rappel": true,
         "conversation": true
-      },
-      "mcp": {
-      "brave_search": false,
-      "github": false,
-      "notion": false
-    }
+      }
   },
     "skills": {
       "built_in": {
         "memoire": true,
         "recherche_web": true,
-        "auto_install": true,
         "meteo": true,
         "traducteur": true,
         "rappel": true,
         "conversation": true
-      },
-      "external": {}
+      }
     },
   "memoire": {
     "court_terme_max_messages": 20,

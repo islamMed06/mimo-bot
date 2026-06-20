@@ -10,10 +10,11 @@ class RappelSkill:
     def __init__(self, config, memory):
         self.config = config
         self.memory = memory
-        self._user_id = None
 
-    async def executer(self, texte):
-        self._user_id = "1464626221"
+    async def executer(self, texte, user_id=None):
+        if not user_id:
+            return "Erreur: utilisateur non identifie."
+        self._user_id = user_id
         t = texte.lower()
         if "liste" in t or "list" in t or "affiche" in t or "mes rappels" in t:
             return self._liste()
@@ -71,7 +72,7 @@ class RappelSkill:
             try:
                 dt = datetime.fromisoformat(ts)
                 aff = dt.strftime("%H:%M")
-            except Exception:
+            except (ValueError, TypeError):
                 aff = ts[:16]
             lignes.append(f"  `{rid[-6:]}` {aff} → {r['message'][:60]}")
         return "\n".join(lignes)
@@ -127,14 +128,14 @@ class RappelSkill:
             }
         }
 
-    async def executer_args(self, action, duree_minutes=None, message=None, id_suppression=None):
+    async def executer_args(self, action, duree_minutes=None, message=None, id_suppression=None, user_id=None):
         if action == "lister":
-            return await self.executer("liste mes rappels")
+            return await self.executer("liste mes rappels", user_id=user_id)
         if action == "supprimer":
-            return await self.executer(f"supprime rappel {id_suppression}")
+            return await self.executer(f"supprime rappel {id_suppression}", user_id=user_id)
         if action == "programmer":
             texte = f"programme un rappel dans {duree_minutes} min"
             if message:
                 texte += f" de {message}"
-            return await self.executer(texte)
+            return await self.executer(texte, user_id=user_id)
         return "Action non reconnue. Utilise programmer, lister ou supprimer."

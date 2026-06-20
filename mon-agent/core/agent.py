@@ -29,32 +29,17 @@ class Agent:
 
     def _charger_outils(self):
         cfg_outils = self.config["tools"]["built_in"]
-        from tools.built_in.calendrier import CalendrierOutil
-        from tools.built_in.email import EmailOutil
-        from tools.built_in.correction import CorrectionOutil
-        from tools.built_in.notes import NotesOutil
-        from tools.built_in.fiches import FichesOutil
-        from tools.built_in.stats import StatsOutil
         from tools.built_in.site_web import SiteWebOutil
         from skills.built_in.recherche_web import RechercheWebSkill
-        from skills.built_in.auto_install import AutoInstallSkill
         from skills.built_in.memoire import MemoireSkill
         from skills.built_in.meteo import MeteoSkill
         from skills.built_in.traducteur import TraducteurSkill
         from skills.built_in.rappel import RappelSkill
         from skills.built_in.conversation import ConversationSkill
-        from tools.mcp.loader import MCPLoader
 
         mapping = {
-            "calendrier": CalendrierOutil,
-            "email": EmailOutil,
-            "correction": CorrectionOutil,
-            "notes": NotesOutil,
-            "fiches": FichesOutil,
-            "stats": StatsOutil,
             "site_web": SiteWebOutil,
             "recherche_web": RechercheWebSkill,
-            "auto_install": AutoInstallSkill,
             "memoire": MemoireSkill,
             "meteo": MeteoSkill,
             "traducteur": TraducteurSkill,
@@ -68,9 +53,6 @@ class Agent:
                     log.info(f"Outil charge: {nom}")
                 except Exception as e:
                     log.warning(f"Erreur chargement {nom}: {e}")
-        mcp_loader = MCPLoader(self.config)
-        outils_mcp = mcp_loader.charger()
-        self.outils.update(outils_mcp)
 
     def _build_tool_schemas(self):
         schemas = []
@@ -84,11 +66,12 @@ class Agent:
 
     async def traiter_message(self, texte, user_id="default", msg_date=None):
         import re
+        import asyncio
         from core.router import detecter_intention, executer_intention
         if not self.llm.historique:
-            self._restaurer_contexte(user_id)
+            await self._restaurer_contexte(user_id)
         else:
-            profil = self.memory.charger_profil(user_id)
+            profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
             identite = profil.get("identite")
             if identite and self.llm.identite_est_valide(identite) and not any(m["role"] == "system" and "[Profil utilisateur]" in m["content"] for m in self.llm.historique):
                 self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {identite}"})
@@ -97,32 +80,34 @@ class Agent:
         # Detection auto si l'utilisateur se presente
         m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(.+)", texte.lower())
         if m_name:
-            nom = m_name.group(1).strip().rstrip(".,!?;").capitalize()
+            nom = m_name.group(1).strip().rstrip(".,!?;").title()
             if nom and len(nom) >= 2:
-                profil = self.memory.charger_profil(user_id)
+                profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
                 profil["identite"] = f"L'utilisateur s'appelle {nom}."
-                self.memory.sauvegarder_profil(profil, user_id)
+                await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
                 log.info(f"Identite definie via phrase: {nom}")
-        # Fonction calling: LLM decide quel outil appeler
+        # Phase 1: Function calling (max 3 iterations)
         schemas = self._build_tool_schemas()
         reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, msg_date=msg_date, tools=schemas)
-        if tool_calls:
-            log.info(f"Tool calls: {[tc['function']['name'] for tc in tool_calls]}")
+        iterations = 0
+        while tool_calls and iterations < 3:
+            iterations += 1
+            log.info(f"Tool calls (iter {iterations}): {[tc['function']['name'] for tc in tool_calls]}")
             for tc in tool_calls:
                 func_name = tc["function"]["name"]
                 try:
                     args = json.loads(tc["function"]["arguments"])
-                except Exception:
+                except json.JSONDecodeError:
                     args = {}
                 outil = self.outils.get(func_name)
                 if outil and hasattr(outil, 'executer_args'):
                     try:
-                        resultat = await outil.executer_args(**args)
+                        resultat = await outil.executer_args(**args, user_id=user_id)
                     except Exception as e:
                         resultat = f"Erreur outil {func_name}: {e}"
                 elif outil and hasattr(outil, 'executer'):
                     try:
-                        resultat = await outil.executer(texte)
+                        resultat = await outil.executer(texte, user_id=user_id)
                     except Exception as e:
                         resultat = f"Erreur outil {func_name}: {e}"
                 else:
@@ -132,10 +117,15 @@ class Agent:
                     "tool_call_id": tc["id"],
                     "content": str(resultat)
                 })
+            if iterations < 3:
+                reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, tools=schemas)
+            else:
+                tool_calls = None
+        if iterations > 0:
             reponse, llm_utilise = self.llm.reformuler_avec_outil(user_id)
             self.memory.ajouter_message("assistant", reponse, user_id)
             return reponse, llm_utilise
-        # Fallback: keyword router si le LLM n'a pas utilise d'outil
+        # Phase 2: Fallback keyword router (si fonction calling non declenche)
         intention = detecter_intention(texte)
         log.info(f"Intention detectee (fallback): {intention}")
         outil = executer_intention(intention, texte, self.outils)
@@ -144,59 +134,50 @@ class Agent:
             if not est_question:
                 try:
                     if hasattr(outil, 'executer'):
-                        resultat = await outil.executer(texte)
-                    else:
-                        resultat = await outil(texte)
-                    if resultat is not None:
-                        return resultat, intention
+                        resultat = await outil.executer(texte, user_id=user_id)
+                        if resultat:
+                            reponse = str(resultat)
                 except Exception as e:
                     log.warning(f"Erreur outil {intention}: {e}")
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
 
-    def _restaurer_contexte(self, user_id):
+    async def _restaurer_contexte(self, user_id):
         import re
-        profil = self.memory.charger_profil(user_id)
+        import asyncio
+        profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
         identite = profil.get("identite")
         if identite and self.llm.identite_est_valide(identite):
             self.llm.historique.append({"role": "system", "content": f"[Profil utilisateur] {identite}"})
-        resume = self.memory.charger_resume(user_id)
-        if resume:
-            self.llm.historique.append({"role": "system", "content": f"[Resume conversation precedente] {resume}"})
-        messages = self.memory.charger_conversations_recentes(user_id)
-        dates_anciennes = set()
+        resume_data = await asyncio.to_thread(self.memory.charger_resume, user_id)
+        resume = resume_data[0] if resume_data else None
+        if resume_data:
+            resume_date = resume_data[1]
+            label = f"[Resume {resume_date}]" if resume_date else "[Resume]"
+            self.llm.historique.append({"role": "system", "content": f"{label} {resume}"})
+        messages = await asyncio.to_thread(self.memory.charger_session_du_jour, user_id)
         for m in messages:
-            # Nettoyer le prefixe date du contenu et le remplacer par une note system
-            contenu = m["content"]
-            match = re.match(r'^\[(\d{4}-\d{2}-\d{2})\]\s*', contenu)
-            if match:
-                dates_anciennes.add(match.group(1))
-                contenu = contenu[match.end():]
-            self.llm.historique.append({"role": m["role"], "content": contenu})
-        # Scanner les messages pour trouver des auto-presentations (regex)
+            self.llm.historique.append({"role": m["role"], "content": m["content"]})
         if (not identite or not self.llm.identite_est_valide(identite)) and messages:
             trouve = False
             for m in messages:
                 m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(.+)", m["content"].lower())
                 if m_name:
-                    nom = m_name.group(1).strip().rstrip(".,!?;").capitalize()
-                    profil = self.memory.charger_profil(user_id)
+                    nom = m_name.group(1).strip().rstrip(".,!?;").title()
+                    profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
                     profil["identite"] = f"L'utilisateur s'appelle {nom}."
-                    self.memory.sauvegarder_profil(profil, user_id)
+                    await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
                     self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] L'utilisateur s'appelle {nom}."})
                     log.info(f"Identite restauree depuis historique: {nom}")
                     trouve = True
                     break
             if not trouve:
-                extraites = self.llm._extraire_identite(user_id, messages)
+                extraites = await asyncio.to_thread(self.llm._extraire_identite, user_id, messages, resume if resume_data else None)
                 if extraites:
                     self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {extraites}"})
-        if dates_anciennes:
-            dates_txt = ", ".join(sorted(dates_anciennes))
-            self.llm.historique.insert(0, {"role": "system", "content": f"[Dates] Messages du {dates_txt} viennent de sessions precedentes."})
         if messages or resume or identite:
             log.info(f"Contexte restaure: {len(messages)} msgs + resume {'+ identite ' if identite else ' '}pour {user_id}")
         seuil = self.config["memoire"]["court_terme_max_messages"]
         if len(self.llm.historique) > seuil * 2:
             log.info("Proactive summarization before first user message")
-            self.llm._resumer_anciens(user_id)
+            await asyncio.to_thread(self.llm._resumer_anciens, user_id)

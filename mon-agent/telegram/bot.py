@@ -1,4 +1,4 @@
-import os, sys, time, asyncio, logging, threading, gc, atexit, signal, json
+import os, sys, time, asyncio, logging, threading, gc, signal, json
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -23,16 +23,6 @@ POLL_COUNT = 0
 _TOKEN = os.getenv("TELEGRAM_TOKEN")
 _STOP = False
 
-def _fermer_session():
-    import httpx
-    if _TOKEN:
-        try:
-            httpx.post(f"https://api.telegram.org/bot{_TOKEN}/close", timeout=5)
-        except Exception:
-            pass
-
-atexit.register(_fermer_session)
-
 def _stopper(signum, frame):
     global _STOP, agent
     _STOP = True
@@ -40,7 +30,6 @@ def _stopper(signum, frame):
     log.info(f"SIGTERM ({signum}) recu a {now_utc.strftime('%H:%M:%S')} UTC, arret propre...")
 
 signal.signal(signal.SIGTERM, _stopper)
-LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
 
 def get_agent():
     global agent, _agent_lock
@@ -55,7 +44,7 @@ def heartbeat():
         try:
             with open(HEARTBEAT_FILE, "w") as f:
                 f.write(str(time.time()))
-        except Exception:
+        except (IOError, OSError):
             pass
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,10 +64,12 @@ async def outils(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
-    llm = LLM_INDICATEURS.get(a.llm.llm_actif, a.llm.llm_actif)
+    llm = a.config["llm"]["noms_affichage"].get(a.llm.llm_actif, a.llm.llm_actif)
     upt = int(time.time() - START_TIME)
     h, r = divmod(upt, 3600); m, s = divmod(r, 60)
-    await update.message.reply_text(f"**{a.config['agent']['nom']}** v{a.config['agent']['version']}\nLLM: {llm}\nUptime: {h}h{m:02d}m\nRedemarrages: {POLL_COUNT}\nMemoire: {len(a.memory.court_terme)} msgs\nOutils: {len(a.outils)}")
+    user_id = str(update.effective_user.id)
+    n_msgs = len(a.memory.court_terme.get(user_id, []))
+    await update.message.reply_text(f"**{a.config['agent']['nom']}** v{a.config['agent']['version']}\nLLM: {llm}\nUptime: {h}h{m:02d}m\nRedemarrages: {POLL_COUNT}\nMemoire: {n_msgs} msgs\nOutils: {len(a.outils)}")
 
 async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
@@ -111,9 +102,11 @@ async def diagnostic(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def memoire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
-    profil = a.memory.charger_profil(str(update.effective_user.id))
+    user_id = str(update.effective_user.id)
+    profil = a.memory.charger_profil(user_id)
     prefs = profil.get("preferences", {})
-    await update.message.reply_text(f"**Profil**\nLangue: {prefs.get('langue', 'fr')}\nMessages session: {len(a.memory.court_terme)}")
+    n_msgs = len(a.memory.court_terme.get(user_id, []))
+    await update.message.reply_text(f"**Profil**\nLangue: {prefs.get('langue', 'fr')}\nMessages session: {n_msgs}")
 
 async def test_llm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a = get_agent()
@@ -159,30 +152,22 @@ async def setname(update: Update, context: ContextTypes.DEFAULT_TYPE):
     a.memory.sauvegarder_profil(profil, user_id)
     await update.message.reply_text(f"Identite sauvegardee : {nom}")
 
-async def installer(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    package = " ".join(context.args) if context.args else ""
-    if not package:
-        await update.message.reply_text("Usage: /installer <nom_package>")
-        return
-    outil = get_agent().outils.get("auto_install")
-    if not outil:
-        await update.message.reply_text("Outil indisponible.")
-        return
-    await update.message.reply_text(f"Installation de {package}...")
-    resultat = await outil.installer(package)
-    await update.message.reply_text(resultat)
-
 async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
     envoyer_rappels()
-    user_id = str(update.effective_user.id)
-    admin_tg = os.getenv("ADMIN_TELEGRAM_ID")
-    admin_supabase = os.getenv("ADMIN_SUPABASE_ID")
-    if admin_tg and admin_supabase and user_id == admin_tg:
-        log.info("Admin Telegram → Supabase ID mapping")
-        user_id = admin_supabase
+    a = get_agent()
+    user_id = a.memory.resoudre_user_id(str(update.effective_user.id))
     texte = update.message.text
+    user = update.effective_user
+    if user and (user.full_name or user.first_name):
+        profil = a.memory.charger_profil(user_id)
+        if not profil.get("identite"):
+            nom = user.full_name or user.first_name
+            if nom and len(nom) >= 2:
+                profil["identite"] = f"L'utilisateur s'appelle {nom}."
+                a.memory.sauvegarder_profil(profil, user_id)
+                log.info(f"Identite definie via Telegram: {nom}")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
         reponse, source = await get_agent().traiter_message(texte, user_id, msg_date=update.message.date)
@@ -198,7 +183,7 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(str(reponse))
     except Exception as e:
-        log.error(f"Erreur: {e}")
+        log.error(f"Erreur traitement message: {type(e).__name__}: {e}")
         await update.message.reply_text("Desole, une erreur s'est produite.")
 
 def _log_memory():
@@ -208,7 +193,7 @@ def _log_memory():
                 if line.startswith("VmRSS:"):
                     log.info(f"MEM: {line.strip()}")
                     break
-    except Exception:
+    except (IOError, OSError):
         pass
 
 def keepalive():
@@ -231,11 +216,11 @@ def keepalive():
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
                         defraichir_cache_http(dt)
-            except Exception:
+            except httpx.RequestError:
                 pass
             try:
                 httpx.get(f"http://localhost:{port}", timeout=5)
-            except Exception:
+            except httpx.RequestError:
                 pass
             gc.collect()
 
@@ -363,7 +348,7 @@ def lancer_bot():
                     log.info(f"Session fermee (tentative {t+1})")
                 break
             time.sleep(2)
-        except Exception:
+        except httpx.RequestError:
             time.sleep(2)
     httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
     time.sleep(2)
@@ -372,7 +357,7 @@ def lancer_bot():
                 CommandHandler("outils", outils), CommandHandler("status", status),
                 CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
                 CommandHandler("uptime", uptime),
-                CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("setname", setname), CommandHandler("installer", installer),
+                CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("setname", setname),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
     for h in handlers:
         app.add_handler(h)

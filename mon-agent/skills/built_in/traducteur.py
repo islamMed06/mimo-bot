@@ -1,5 +1,6 @@
 import logging
 import re
+import httpx
 
 log = logging.getLogger("TRADUCTEUR")
 
@@ -76,8 +77,7 @@ class TraducteurSkill:
                     resultat = rep.json()
                     return f"Traduction : {resultat.get('translatedText', texte)}"
                 return f"Traduction ({source}→{cible}) : {texte}"
-        except Exception:
-            # fallback: renvoyer le texte tel quel
+        except (httpx.RequestError, httpx.HTTPStatusError, KeyError):
             return f"Traduction ({source}→{cible}) : {texte}"
 
     @staticmethod

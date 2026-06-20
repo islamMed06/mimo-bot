@@ -32,7 +32,7 @@ def surveiller():
         if token:
             try:
                 httpx.get(f"https://api.telegram.org/bot{token}/getMe", timeout=10)
-            except Exception:
+            except httpx.RequestError:
                 pass
             gc.collect()
         if bot and bot.poll() is not None:
