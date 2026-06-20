@@ -1,4 +1,5 @@
 import os, sys, time, asyncio, logging, threading, gc, atexit, signal, json
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -33,9 +34,10 @@ def _fermer_session():
 atexit.register(_fermer_session)
 
 def _stopper(signum, frame):
-    global _STOP
+    global _STOP, agent
     _STOP = True
-    log.info("SIGTERM recu, sortie propre...")
+    now_utc = datetime.now(timezone.utc)
+    log.info(f"SIGTERM ({signum}) recu a {now_utc.strftime('%H:%M:%S')} UTC, arret propre...")
 
 signal.signal(signal.SIGTERM, _stopper)
 LLM_INDICATEURS = {"groq": "llama-3.1-8b", "gemini": "gemini-2.0-flash", "openrouter": "llama-3.3-70b", "huggingface": "phi-3", "cloudflare": "llama-3.2-3b", "github": "gpt-4o-mini"}
