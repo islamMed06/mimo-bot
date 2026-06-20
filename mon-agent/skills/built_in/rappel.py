@@ -1,6 +1,7 @@
 import re
 import logging
 from datetime import datetime, timedelta, timezone
+from core.llm import maintenant_algerie
 from core.memory import ALGERIA_TZ
 
 log = logging.getLogger("RAPPEL")
@@ -28,7 +29,7 @@ class RappelSkill:
         message = self._extraire_message(texte)
         if not message:
             return "Quel est le message du rappel ? (ex: `dans 30 min de [message]`)"
-        echeance = datetime.now(ALGERIA_TZ) + timedelta(minutes=duree_minutes)
+        echeance = maintenant_algerie() + timedelta(minutes=duree_minutes)
         doc_id = self.memory.ajouter_rappel(self._user_id, message, echeance.isoformat())
         if doc_id:
             return f"Rappel programmé dans {self._fmt_duree(duree_minutes)} (à {echeance.strftime('%H:%M')}) : {message}"

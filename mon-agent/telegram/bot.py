@@ -249,6 +249,7 @@ def envoyer_rappels():
             return
         echus = a.memory.rappels_echus()
         if not echus:
+            log.info("Aucun rappel a envoyer")
             return
         log.info(f"Envoi de {len(echus)} rappel(s)")
         import httpx

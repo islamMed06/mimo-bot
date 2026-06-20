@@ -258,12 +258,13 @@ class MemoryManager:
         if not self.db:
             return []
         try:
-            maintenant = datetime.now(ALGERIA_TZ).isoformat()
+            maintenant = datetime.now(ALGERIA_TZ)
             docs = self.db.collection("reminders").where("envoye", "==", False).stream()
             echus = []
             for doc in docs:
                 data = doc.to_dict()
-                if data.get("timestamp", "") <= maintenant:
+                ts_str = data.get("timestamp", "")
+                if ts_str and datetime.fromisoformat(ts_str) <= maintenant:
                     echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
             log.info(f"rappels_echus: {len(echus)} echus")
             return echus
