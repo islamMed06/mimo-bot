@@ -64,6 +64,24 @@ class Agent:
                     log.warning(f"Schema {nom} ignoré: {e}")
         return schemas if schemas else None
 
+    async def _router_result(self, texte, user_id):
+        from core.router import detecter_intention, executer_intention
+        import re
+        intention = detecter_intention(texte)
+        if intention and intention != "conversation":
+            outil = executer_intention(intention, texte, self.outils)
+            if outil and hasattr(outil, 'executer'):
+                est_question = bool(re.search(r'\b(si|est-ce que|peux.tu|es.tu|vas.tu|qu-est-ce|comment)\b', texte.lower())) and '?' in texte
+                if not est_question:
+                    try:
+                        resultat = await outil.executer(texte, user_id=user_id)
+                        if resultat:
+                            log.info(f"Router a execute: {intention}")
+                            return str(resultat)
+                    except Exception as e:
+                        log.warning(f"Erreur outil {intention}: {e}")
+        return None
+
     async def traiter_message(self, texte, user_id="default", msg_date=None):
         import re
         import asyncio
@@ -86,7 +104,7 @@ class Agent:
                 profil["identite"] = f"L'utilisateur s'appelle {nom}."
                 await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
                 log.info(f"Identite definie via phrase: {nom}")
-        # Phase 1: Function calling (max 3 iterations)
+        # Phase 1: Function calling (max 2 iterations)
         schemas = self._build_tool_schemas()
         reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, msg_date=msg_date, tools=schemas)
         iterations = 0
@@ -123,22 +141,16 @@ class Agent:
                 tool_calls = None
         if iterations > 0:
             reponse, llm_utilise = self.llm.reformuler_avec_outil(user_id)
+            # Phase 1.5: si le LLM a appele le mauvais outil, le router peut corriger
+            router_result = await self._router_result(texte, user_id)
+            if router_result:
+                reponse = router_result
             self.memory.ajouter_message("assistant", reponse, user_id)
             return reponse, llm_utilise
         # Phase 2: Fallback keyword router (si fonction calling non declenche)
-        intention = detecter_intention(texte)
-        log.info(f"Intention detectee (fallback): {intention}")
-        outil = executer_intention(intention, texte, self.outils)
-        if outil:
-            est_question = bool(re.search(r'\b(si|est-ce que|peux.tu|es.tu|vas.tu|qu-est-ce|comment)\b', texte.lower())) and '?' in texte
-            if not est_question:
-                try:
-                    if hasattr(outil, 'executer'):
-                        resultat = await outil.executer(texte, user_id=user_id)
-                        if resultat:
-                            reponse = str(resultat)
-                except Exception as e:
-                    log.warning(f"Erreur outil {intention}: {e}")
+        router_result = await self._router_result(texte, user_id)
+        if router_result:
+            reponse = router_result
         self.memory.ajouter_message("assistant", reponse, user_id)
         return reponse, llm_utilise
 
