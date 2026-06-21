@@ -149,12 +149,14 @@ class Agent:
         identite = profil.get("identite")
         if identite and self.llm.identite_est_valide(identite):
             self.llm.historique.append({"role": "system", "content": f"[Profil utilisateur] {identite}"})
-        resume_data = await asyncio.to_thread(self.memory.charger_resume, user_id)
-        resume = resume_data[0] if resume_data else None
-        if resume_data:
-            resume_date = resume_data[1]
-            label = f"[Resume {resume_date}]" if resume_date else "[Resume]"
-            self.llm.historique.append({"role": "system", "content": f"{label} {resume}"})
+        super_data = await asyncio.to_thread(self.memory.charger_super_resume, user_id)
+        if super_data:
+            super_texte, super_date = super_data
+            label = f"[Super-resume (mis a jour {super_date})]" if super_date else "[Super-resume]"
+            self.llm.historique.append({"role": "system", "content": f"{label} {super_texte}"})
+        recents = await asyncio.to_thread(self.memory.charger_resumes_recents, user_id, 3)
+        for r in recents:
+            self.llm.historique.append({"role": "system", "content": f"[Resume {r['date']}] {r['resume']}"})
         messages = await asyncio.to_thread(self.memory.charger_session_du_jour, user_id)
         for m in messages:
             self.llm.historique.append({"role": m["role"], "content": m["content"]})
@@ -172,12 +174,9 @@ class Agent:
                     trouve = True
                     break
             if not trouve:
-                extraites = await asyncio.to_thread(self.llm._extraire_identite, user_id, messages, resume if resume_data else None)
+                resume_ctx = super_data[0] if super_data else None
+                extraites = await asyncio.to_thread(self.llm._extraire_identite, user_id, messages, resume_ctx)
                 if extraites:
                     self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {extraites}"})
-        if messages or resume or identite:
+        if messages or super_data or identite or recents:
             log.info(f"Contexte restaure: {len(messages)} msgs + resume {'+ identite ' if identite else ' '}pour {user_id}")
-        seuil = self.config["memoire"]["court_terme_max_messages"]
-        if len(self.llm.historique) > seuil * 2:
-            log.info("Proactive summarization before first user message")
-            await asyncio.to_thread(self.llm._resumer_anciens, user_id)

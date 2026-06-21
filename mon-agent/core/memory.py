@@ -87,14 +87,61 @@ class MemoryManager:
             sujets.append(c)
         return f"Resume session: {' | '.join(sujets[-5:])}"
 
-    def sauvegarder_resume(self, resume, user_id="default"):
+    def sauvegarder_resume(self, resume, user_id="default", date_str=None):
         if not self.db:
             return
         try:
+            maintenant = datetime.now(ALGERIA_TZ)
             ref = self.db.collection("conversations").document(user_id).collection("resumes").document("dernier")
-            ref.set({"resume": resume, "timestamp": datetime.now(ALGERIA_TZ).isoformat()})
+            ref.set({"resume": resume, "timestamp": maintenant.isoformat()})
+            if date_str:
+                ref_date = self.db.collection("conversations").document(user_id).collection("resumes").document(date_str)
+                ref_date.set({"resume": resume, "timestamp": maintenant.isoformat()})
         except Exception as e:
             log.warning(f"Erreur sauvegarde resume: {e}")
+
+    def sauvegarder_super_resume(self, resume, user_id="default"):
+        if not self.db:
+            return
+        try:
+            maintenant = datetime.now(ALGERIA_TZ)
+            ref = self.db.collection("conversations").document(user_id).collection("resumes").document("super")
+            ref.set({"resume": resume, "timestamp": maintenant.isoformat(), "derniere_mise_a_jour": maintenant.isoformat()})
+            log.info(f"Super-resume mis a jour pour {user_id}")
+        except Exception as e:
+            log.warning(f"Erreur sauvegarde super-resume: {e}")
+
+    def charger_super_resume(self, user_id="default"):
+        if not self.db:
+            return None
+        try:
+            doc = self.db.collection("conversations").document(user_id).collection("resumes").document("super").get()
+            if doc.exists:
+                data = doc.to_dict()
+                return data.get("resume"), data.get("timestamp", "")[:10]
+        except Exception as e:
+            log.warning(f"Erreur chargement super-resume: {e}")
+        return None
+
+    def charger_resumes_recents(self, user_id="default", jours=7):
+        if not self.db:
+            return []
+        try:
+            aujourdhui = datetime.now(ALGERIA_TZ)
+            resumes = []
+            for i in range(1, jours + 1):
+                date_str = (aujourdhui - timedelta(days=i)).strftime("%Y-%m-%d")
+                doc = self.db.collection("conversations").document(user_id).collection("resumes").document(date_str).get()
+                if doc.exists:
+                    data = doc.to_dict()
+                    resume = data.get("resume", "")
+                    ts = data.get("timestamp", "")[:10]
+                    if resume:
+                        resumes.append({"date": ts, "resume": resume})
+            return resumes
+        except Exception as e:
+            log.warning(f"Erreur chargement resumes recents: {e}")
+            return []
 
     def charger_resume(self, user_id="default"):
         if not self.db:

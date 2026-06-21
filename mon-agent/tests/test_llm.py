@@ -86,16 +86,20 @@ class TestLLMManager:
     def test_resume_anciens(self, llm):
         manager, mock_client = llm
         fake_resume = FakeCompletion(FakeMsg(content="Resume: conversation de test"))
+        fake_super = FakeCompletion(FakeMsg(content="Super-resume mis a jour"))
         fake_identite = FakeCompletion(FakeMsg(content="L'utilisateur s'appelle Test"))
-        mock_client.chat.completions.create.side_effect = [fake_resume, fake_identite]
+        mock_client.chat.completions.create.side_effect = [fake_resume, fake_super, fake_identite]
         from unittest.mock import MagicMock
         mock_memory = MagicMock()
         mock_memory.charger_profil.return_value = {}
         mock_memory.sauvegarder_resume = MagicMock()
         mock_memory.sauvegarder_profil = MagicMock()
+        mock_memory.charger_super_resume.return_value = ("ancien super resume", "2025-06-14")
+        mock_memory.sauvegarder_super_resume = MagicMock()
         manager.memory = mock_memory
         for i in range(42):
             manager.historique.append({"role": "user", "content": f"message {i}"})
         manager.repondre("dernier message", user_id="test")
         mock_memory.sauvegarder_resume.assert_called_once()
+        mock_memory.sauvegarder_super_resume.assert_called_once()
         assert len(manager.historique) <= 25

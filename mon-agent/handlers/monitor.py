@@ -57,16 +57,9 @@ def surveiller():
 if __name__ == "__main__":
     import signal
     def arreter(signum, frame):
-        log.info("SIGTERM recu, arret bot...")
+        log.info("SIGTERM recu, arret immediat")
         if BOT_PROCESS[0] and BOT_PROCESS[0].poll() is None:
-            log.info("SIGTERM -> bot (graceful close)...")
             BOT_PROCESS[0].terminate()
-            try:
-                BOT_PROCESS[0].wait(5)
-            except subprocess.TimeoutExpired:
-                log.warning("Bot ne repond pas, SIGKILL...")
-                BOT_PROCESS[0].kill()
-                BOT_PROCESS[0].wait(3)
         sys.exit(0)
     signal.signal(signal.SIGTERM, arreter)
     log.info("Moniteur demarre...")

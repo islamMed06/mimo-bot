@@ -1,4 +1,4 @@
-import os, sys, time, asyncio, logging, threading, gc, signal, json
+import os, sys, time, asyncio, logging, threading, gc, json
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -23,13 +23,8 @@ POLL_COUNT = 0
 _TOKEN = os.getenv("TELEGRAM_TOKEN")
 _STOP = False
 
-def _stopper(signum, frame):
-    global _STOP, agent
-    _STOP = True
-    now_utc = datetime.now(timezone.utc)
-    log.info(f"SIGTERM ({signum}) recu a {now_utc.strftime('%H:%M:%S')} UTC, arret propre...")
-
-signal.signal(signal.SIGTERM, _stopper)
+# PTB v22+ gere SIGTERM en interne via run_polling() → _STOP est mis a True
+# dans lancer_bot() apres un arret propre (pas de crash)
 
 def get_agent():
     global agent, _agent_lock
@@ -365,6 +360,9 @@ def lancer_bot():
     for t in range(4):
         try:
             app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
+            global _STOP
+            _STOP = True
+            log.info("Run polling termine proprement (SIGTERM)")
             break
         except Exception as e:
             err_str = f"{type(e).__name__}: {e}"

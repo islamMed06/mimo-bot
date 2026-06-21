@@ -131,7 +131,9 @@ class LLMManager:
                 )
                 resume = completion.choices[0].message.content
                 if self.memory and user_id:
-                    self.memory.sauvegarder_resume(resume, user_id)
+                    date_str = maintenant_algerie().strftime("%Y-%m-%d")
+                    self.memory.sauvegarder_resume(resume, user_id, date_str=date_str)
+                    self._mettre_a_jour_super_resume(user_id, resume)
                 self.historique = self.historique[-self.config["memoire"]["court_terme_max_messages"]:]
                 self.historique.insert(0, {"role": "system", "content": f"[Resume conversation precedente] {resume}"})
                 log.info(f"Anciens messages resumes automatiquement ({len(anciens)} msgs -> resume)")
@@ -168,6 +170,41 @@ class LLMManager:
         if len(s) < 10:
             return False
         return True
+
+    def _mettre_a_jour_super_resume(self, user_id, nouveau_resume):
+        if not self.memory:
+            return
+        try:
+            ancien = self.memory.charger_super_resume(user_id)
+            ancien_texte = ancien[0] if ancien else None
+            if ancien_texte:
+                prompt = (
+                    "Tu geres une memoire a long terme pour un assistant. "
+                    "Voici le resume accumule:\n"
+                    f"{ancien_texte}\n\n"
+                    "Voici un nouveau resume recent:\n"
+                    f"{nouveau_resume}\n\n"
+                    "Produis un resume mis a jour qui combine les deux. "
+                    "PRESERVE toutes les infos sur l'utilisateur (nom, profession, preferences, role). "
+                    "Sois concis (3-5 phrases max)."
+                )
+            else:
+                prompt = (
+                    "Tu initialises la memoire a long terme.\n\n"
+                    f"{nouveau_resume}\n\n"
+                    "Reformule ce resume pour la memoire persistante. "
+                    "PRESERVE les infos sur l'utilisateur. Sois concis (3-5 phrases max)."
+                )
+            completion = self.groq_client.chat.completions.create(
+                model=self.config["llm"]["modele_groq"],
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=400
+            )
+            super_resume = completion.choices[0].message.content
+            self.memory.sauvegarder_super_resume(super_resume, user_id)
+            log.info(f"Super-resume actualise ({len(super_resume)} chars)")
+        except Exception as e:
+            log.warning(f"Erreur mise a jour super-resume: {e}")
 
     def _extraire_identite(self, user_id, messages=None, resume=None):
         try:
