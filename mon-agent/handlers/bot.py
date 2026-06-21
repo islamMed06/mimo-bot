@@ -15,7 +15,6 @@ from core.llm import maintenant_algerie, defraichir_cache_http
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger("BOT")
 
-HEARTBEAT_FILE = os.path.join(os.path.dirname(__file__), "..", "heartbeat.txt")
 agent = None
 _agent_lock = threading.Lock()
 START_TIME = time.time()
@@ -23,8 +22,8 @@ POLL_COUNT = 0
 _TOKEN = os.getenv("TELEGRAM_TOKEN")
 _STOP = False
 
-# PTB v22+ gere SIGTERM en interne via run_polling() → _STOP est mis a True
-# dans lancer_bot() apres un arret propre (pas de crash)
+# PTB v22+ gere SIGTERM en interne via run_polling()
+# _STOP est mis a True dans lancer_bot() apres un arret propre
 
 def get_agent():
     global agent, _agent_lock
@@ -32,15 +31,6 @@ def get_agent():
         if agent is None:
             agent = Agent()
     return agent
-
-def heartbeat():
-    while True:
-        time.sleep(10)
-        try:
-            with open(HEARTBEAT_FILE, "w") as f:
-                f.write(str(time.time()))
-        except (IOError, OSError):
-            pass
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nom = get_agent().config["agent"]["nom"]
@@ -197,9 +187,10 @@ def keepalive():
     counter = 0
     log.info("Keepalive demarre (verifie rappels toutes les 15s)")
     while True:
-        time.sleep(15)
-        counter += 1
-        envoyer_rappels()
+        try:
+            time.sleep(15)
+            counter += 1
+            envoyer_rappels()
         if counter % 8 == 0:
             _log_memory()
             try:
@@ -218,6 +209,8 @@ def keepalive():
             except httpx.RequestError:
                 pass
             gc.collect()
+        except Exception as e:
+            log.warning(f"Keepalive erreur: {e}")
 
 def envoyer_rappels():
     token = os.getenv("TELEGRAM_TOKEN")
@@ -386,9 +379,6 @@ def main():
     t_http.start()
     t_keep = threading.Thread(target=keepalive, daemon=True)
     t_keep.start()
-    t_heart = threading.Thread(target=heartbeat, daemon=True)
-    t_heart.start()
-    time.sleep(2)
     global _STOP
     while not _STOP:
         try:
