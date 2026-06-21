@@ -191,24 +191,24 @@ def keepalive():
             time.sleep(15)
             counter += 1
             envoyer_rappels()
-        if counter % 8 == 0:
-            _log_memory()
-            try:
-                resp = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
-                date_str = resp.headers.get("Date")
-                if date_str:
-                    dt = parsedate_to_datetime(date_str)
-                    if dt:
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                        defraichir_cache_http(dt)
-            except httpx.RequestError:
-                pass
-            try:
-                httpx.get(f"http://localhost:{port}", timeout=5)
-            except httpx.RequestError:
-                pass
-            gc.collect()
+            if counter % 8 == 0:
+                _log_memory()
+                try:
+                    resp = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)
+                    date_str = resp.headers.get("Date")
+                    if date_str:
+                        dt = parsedate_to_datetime(date_str)
+                        if dt:
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=timezone.utc)
+                            defraichir_cache_http(dt)
+                except httpx.RequestError:
+                    pass
+                try:
+                    httpx.get(f"http://localhost:{port}", timeout=5)
+                except httpx.RequestError:
+                    pass
+                gc.collect()
         except Exception as e:
             log.warning(f"Keepalive erreur: {e}")
 
