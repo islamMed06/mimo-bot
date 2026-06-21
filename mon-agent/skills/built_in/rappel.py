@@ -50,7 +50,7 @@ class RappelSkill:
         return val // 60
 
     def _extraire_message(self, texte):
-        for sep in [" de ", " pour ", " : ", ": "]:
+        for sep in [" de ", " pour ", " our ", " : ", ": "]:
             if sep in texte:
                 return texte.split(sep, 1)[-1].strip()
         return ""

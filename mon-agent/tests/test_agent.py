@@ -32,10 +32,10 @@ class TestTraiterMessage:
     async def test_max_tool_iterations(self, agent):
         tc = [{"id": "call_loop", "type": "function", "function": {"name": "conversation", "arguments": '{"action": "activer"}'}}]
         agent.llm.repondre = MagicMock(return_value=("", "groq", tc))
-        agent.llm.reformuler_avec_outil = MagicMock(return_value=("Apres 3 iterations", "groq"))
+        agent.llm.reformuler_avec_outil = MagicMock(return_value=("Apres 2 iterations", "groq"))
         agent.outils["conversation"].executer_args = MagicMock(return_value="ok")
         reponse, llm = await agent.traiter_message("test", "user1")
-        assert agent.llm.repondre.call_count == 3
+        assert agent.llm.repondre.call_count == 2
 
     @pytest.mark.asyncio
     async def test_auto_name_detection(self, agent):

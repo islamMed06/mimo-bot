@@ -90,7 +90,7 @@ class Agent:
         schemas = self._build_tool_schemas()
         reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, msg_date=msg_date, tools=schemas)
         iterations = 0
-        while tool_calls and iterations < 3:
+        while tool_calls and iterations < 2:
             iterations += 1
             log.info(f"Tool calls (iter {iterations}): {[tc['function']['name'] for tc in tool_calls]}")
             for tc in tool_calls:
@@ -117,7 +117,7 @@ class Agent:
                     "tool_call_id": tc["id"],
                     "content": str(resultat)
                 })
-            if iterations < 3:
+            if iterations < 2:
                 reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, tools=schemas)
             else:
                 tool_calls = None

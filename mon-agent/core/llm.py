@@ -81,6 +81,8 @@ class LLMManager:
         self.gemini_disponible = bool(self.gemini_key)
         self.llm_actif = "groq"
         self.historique = []
+        self._dernier_appel_groq = 0.0
+        self._groq_rate_limited = False
         for nom in ["groq", "gemini", "openrouter", "huggingface", "cloudflare", "github"]:
             setattr(self, f"derniere_erreur_{nom}", "")
 
@@ -250,12 +252,12 @@ class LLMManager:
             messages.append(msg)
         return messages
 
-    def _fallback_chain(self, messages, user_message):
+    def _fallback_chain(self, messages, user_message, skip_groq=False):
         texte = None
-        fallbacks = [
-            ("groq", self._appeler_groq),
-            ("gemini", self._appeler_gemini),
-        ]
+        fallbacks = []
+        if not skip_groq:
+            fallbacks.append(("groq", self._appeler_groq))
+        fallbacks.append(("gemini", self._appeler_gemini))
         if os.getenv("OPENROUTER_API_KEY"):
             fallbacks.append(("openrouter", self._appeler_openrouter))
         if os.getenv("HF_API_KEY"):
@@ -318,16 +320,19 @@ class LLMManager:
     def reformuler_avec_outil(self, user_id=None):
         maintenant = maintenant_algerie()
         messages = self._build_messages(None, maintenant)
-        texte = self._fallback_chain(messages, None)
+        texte = self._fallback_chain(messages, None, skip_groq=True)
         self.historique.append({"role": "assistant", "content": texte})
         gc.collect()
         return texte, self.llm_actif
 
     def _appeler_groq_raw(self, messages, tools=None, tentative=1):
+        delai = max(0, 3.0 - (time.time() - self._dernier_appel_groq))
+        if delai > 0:
+            time.sleep(delai)
+        if tentative == 1 and self._groq_rate_limited and time.time() - self._dernier_appel_groq < 30:
+            log.info("Groq rate-limite recemment, skip direct vers fallback")
+            return None
         try:
-            temps_attente = max(0, 2.0 - (time.time() - getattr(self, '_dernier_appel_groq', 0)))
-            if temps_attente > 0:
-                time.sleep(temps_attente)
             kwargs = {
                 "model": self.config["llm"]["modele_groq"],
                 "messages": messages,
@@ -338,15 +343,17 @@ class LLMManager:
                 kwargs["tools"] = tools
             completion = self.groq_client.chat.completions.create(**kwargs)
             self._dernier_appel_groq = time.time()
+            self._groq_rate_limited = False
             return completion.choices[0].message
         except RateLimitError:
             self._dernier_appel_groq = time.time()
-            if tentative < 4:
-                duree = 2 ** tentative
-                log.warning(f"Rate limit Groq, attente {duree}s (tentative {tentative}/3)")
+            self._groq_rate_limited = True
+            if tentative < 3:
+                duree = 4 * tentative
+                log.warning(f"Rate limit Groq, attente {duree}s (tentative {tentative}/2)")
                 time.sleep(duree)
                 return self._appeler_groq_raw(messages, tools, tentative + 1)
-            err = "RateLimitError: limite atteinte apres 3 tentatives"
+            err = "RateLimitError: limite atteinte"
             log.warning(f"Erreur Groq: {err}")
             self.derniere_erreur_groq = err
             return None
