@@ -78,6 +78,15 @@ class Agent:
                         if resultat:
                             log.info(f"Router a execute: {intention}")
                             return str(resultat)
+                    except TypeError as e:
+                        log.warning(f"Erreur outil {intention} (tentative sans user_id): {e}")
+                        try:
+                            resultat = await outil.executer(texte)
+                            if resultat:
+                                log.info(f"Router a execute: {intention}")
+                                return str(resultat)
+                        except Exception as e2:
+                            log.warning(f"Erreur outil {intention} (sans user_id aussi): {e2}")
                     except Exception as e:
                         log.warning(f"Erreur outil {intention}: {e}")
         return None
@@ -126,6 +135,11 @@ class Agent:
                 elif outil and hasattr(outil, 'executer'):
                     try:
                         resultat = await outil.executer(texte, user_id=user_id)
+                    except TypeError:
+                        try:
+                            resultat = await outil.executer(texte)
+                        except Exception as e:
+                            resultat = f"Erreur outil {func_name}: {e}"
                     except Exception as e:
                         resultat = f"Erreur outil {func_name}: {e}"
                 else:

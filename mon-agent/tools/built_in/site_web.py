@@ -11,7 +11,7 @@ class SiteWebOutil:
         self.site_url = os.getenv("SITE_URL", "http://localhost:3000")
         self.api_secret = os.getenv("SITE_API_SECRET", "")
 
-    async def executer(self, texte):
+    async def executer(self, texte, user_id=None):
         texte_lower = texte.lower()
         if "utilisateur" in texte_lower or "user" in texte_lower:
             if "liste" in texte_lower or "list" in texte_lower or "voir" in texte_lower or "show" in texte_lower:

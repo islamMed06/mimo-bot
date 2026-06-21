@@ -6,7 +6,7 @@ class MemoireSkill:
         self.config = config
         self.memory = memory
 
-    async def executer(self, texte):
+    async def executer(self, texte, user_id=None):
         return "Voici ce que je sais de toi:\n" + self.memory.get_contexte()
 
     @staticmethod

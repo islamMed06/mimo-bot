@@ -9,7 +9,7 @@ class MeteoSkill:
         self.config = config
         self.memory = memory
 
-    async def executer(self, texte):
+    async def executer(self, texte, user_id=None):
         ville = self._extraire_ville(texte)
         return await self._meteo(ville)
 

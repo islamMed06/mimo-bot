@@ -8,7 +8,7 @@ class RechercheWebSkill:
         self.config = config
         self.memory = memory
 
-    async def executer(self, texte):
+    async def executer(self, texte, user_id=None):
         if "cherche" in texte.lower() or "recherche" in texte.lower() or "search" in texte.lower():
             query = texte.replace("cherche", "").replace("recherche", "").replace("search", "").strip()
             if query:

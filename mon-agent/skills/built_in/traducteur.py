@@ -19,7 +19,7 @@ class TraducteurSkill:
         self.config = config
         self.memory = memory
 
-    async def executer(self, texte):
+    async def executer(self, texte, user_id=None):
         cible, source, texte_a_traduire = self._analyser(texte)
         if not texte_a_traduire:
             return "Usage : traduis 'bonjour' en anglais / translate 'hello' to french"
