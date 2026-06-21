@@ -194,8 +194,7 @@ class MemoryManager:
     def _sauvegarder_firebase_atomique(self, doc_ref, msg, user_id, session_id, maintenant, retry=3):
         for t in range(retry):
             try:
-                transaction = self.db.transaction()
-                doc = doc_ref.get(transaction=transaction)
+                doc = doc_ref.get()
                 if doc.exists:
                     data = doc.to_dict()
                     msgs = data.get("messages", [])
@@ -207,10 +206,9 @@ class MemoryManager:
                         if sub:
                             msgs = [s.to_dict() for s in sub]
                     msgs.append(msg)
-                    transaction.set(doc_ref, {"messages": msgs, "derniere_activite": maintenant.isoformat()})
+                    doc_ref.set({"messages": msgs, "derniere_activite": maintenant.isoformat()})
                 else:
-                    transaction.set(doc_ref, {"messages": [msg], "derniere_activite": maintenant.isoformat()})
-                transaction.commit()
+                    doc_ref.set({"messages": [msg], "derniere_activite": maintenant.isoformat()})
                 return
             except Exception as e:
                 if t == retry - 1:

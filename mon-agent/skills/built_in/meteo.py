@@ -74,7 +74,7 @@ class MeteoSkill:
                 return f"Je n'ai pas pu récupérer la météo pour {ville}."
         except Exception as e:
             log.warning(f"Erreur météo: {e}")
-            return None
+            return "Service météo temporairement indisponible."
 
     @staticmethod
     def get_function_schema():
@@ -82,7 +82,7 @@ class MeteoSkill:
             "type": "function",
             "function": {
                 "name": "meteo",
-                "description": "Obtenir la météo actuelle d'une ville",
+                "description": "Outil MÉTÉO : donne la météo actuelle (température, humidité, vent, précipitations) pour une ville. Utilise UNIQUEMENT pour les questions de météo/température.",
                 "parameters": {
                     "type": "object",
                     "properties": {
