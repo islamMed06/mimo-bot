@@ -320,7 +320,7 @@ class LLMManager:
     def reformuler_avec_outil(self, user_id=None):
         maintenant = maintenant_algerie()
         messages = self._build_messages(None, maintenant)
-        texte = self._fallback_chain(messages, None, skip_groq=True)
+        texte = self._fallback_chain(messages, None, skip_groq=bool(self._groq_rate_limited and time.time() - self._dernier_appel_groq < 30))
         self.historique.append({"role": "assistant", "content": texte})
         gc.collect()
         return texte, self.llm_actif
@@ -367,10 +367,22 @@ class LLMManager:
         msg = self._appeler_groq_raw(messages, tentative=tentative)
         return msg.content if msg else None
 
+    def _sanitizer_pour_gemini(self, messages):
+        """Supprime les messages tool/tool_calls que Gemini ne comprend pas."""
+        propres = []
+        for m in messages:
+            role = m.get("role", "")
+            if role in ("tool",):
+                continue
+            propre = {"role": role if role != "assistant" else "model", "content": m.get("content", "")}
+            propres.append(propre)
+        return propres
+
     def _appeler_gemini(self, messages):
         try:
             from google import genai
             client = genai.Client(api_key=self.gemini_key)
+            messages = self._sanitizer_pour_gemini(messages)
             system_msg = messages[0]["content"]
             user_msgs = [m["content"] for m in messages[1:]]
             prompt = f"{system_msg}\n\n" + "\n".join(user_msgs)
