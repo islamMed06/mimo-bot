@@ -296,6 +296,7 @@ class LLMManager:
                 texte = f"Il est {maintenant.strftime('%H:%M')} le {maintenant.day:02d}/{maintenant.month:02d}/{maintenant.year}."
                 self.historique.append({"role": "assistant", "content": texte})
                 return texte, "system", None
+        self.llm_actif = "groq"
         messages = self._build_messages(user_message, maintenant)
         if tools:
             try:
@@ -323,6 +324,7 @@ class LLMManager:
 
     def reformuler_avec_outil(self, user_id=None):
         maintenant = maintenant_algerie()
+        self.llm_actif = "groq"
         messages = self._build_messages(None, maintenant)
         texte = self._fallback_chain(messages, None, skip_groq=bool(self._groq_rate_limited and time.time() - self._dernier_appel_groq < 30))
         self.historique.append({"role": "assistant", "content": texte})
