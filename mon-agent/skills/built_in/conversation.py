@@ -47,7 +47,7 @@ class ConversationSkill:
             }
         }
 
-    async def executer_args(self, action):
+    async def executer_args(self, action, **kwargs):
         if action == "activer":
             self.mode_actif = True
             return "Mode conversation libre activé ! Je suis plus détendu et créatif."

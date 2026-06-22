@@ -326,12 +326,12 @@ class MemoryManager:
             log.warning(f"Erreur sauvegarde profil: {e}")
 
     # ── Rappels ──────────────────────────────────────
-    def ajouter_rappel(self, user_id, message, timestamp_iso):
+    def ajouter_rappel(self, user_id, message, timestamp_iso, chat_id=None):
         if not self.db:
             return None
         try:
             doc_id = uuid4().hex
-            data = {"user_id": user_id, "message": message, "timestamp": timestamp_iso,
+            data = {"user_id": user_id, "chat_id": chat_id or user_id, "message": message, "timestamp": timestamp_iso,
                     "cree_le": datetime.now(ALGERIA_TZ).isoformat(), "envoye": False}
             self.db.collection("reminders").document(doc_id).set(data)
             return doc_id
@@ -384,7 +384,7 @@ class MemoryManager:
             for doc in docs:
                 data = doc.to_dict()
                 if data.get("envoye") == False and data.get("timestamp", "") <= maintenant_iso:
-                    echus.append({"user_id": data["user_id"], "doc_id": doc.id, "message": data.get("message", "")})
+                    echus.append({"user_id": data["user_id"], "chat_id": data.get("chat_id"), "doc_id": doc.id, "message": data.get("message", "")})
                     if len(echus) >= 100:
                         break
             log.info(f"rappels_echus: {len(echus)} echus")

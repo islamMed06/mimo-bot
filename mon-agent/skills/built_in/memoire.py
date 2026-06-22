@@ -23,5 +23,5 @@ class MemoireSkill:
             }
         }
 
-    async def executer_args(self):
+    async def executer_args(self, **kwargs):
         return await self.executer("")

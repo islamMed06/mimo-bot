@@ -60,5 +60,5 @@ class RechercheWebSkill:
             }
         }
 
-    async def executer_args(self, query):
+    async def executer_args(self, query, **kwargs):
         return await self.rechercher(query)

@@ -108,7 +108,7 @@ class TraducteurSkill:
             }
         }
 
-    async def executer_args(self, text, target_lang="anglais", source_lang=None):
+    async def executer_args(self, text, target_lang="anglais", source_lang=None, **kwargs):
         lang_map = {
             "français": "fr", "francais": "fr", "french": "fr",
             "anglais": "en", "english": "en",

@@ -64,7 +64,7 @@ class Agent:
                     log.warning(f"Schema {nom} ignoré: {e}")
         return schemas if schemas else None
 
-    async def _router_result(self, texte, user_id):
+    async def _router_result(self, texte, user_id, chat_id=None):
         from core.router import detecter_intention, executer_intention
         import re
         intention = detecter_intention(texte)
@@ -73,25 +73,20 @@ class Agent:
             if outil and hasattr(outil, 'executer'):
                 est_question = bool(re.search(r'\b(si|est-ce que|peux.tu|es.tu|vas.tu|qu-est-ce|comment)\b', texte.lower())) and '?' in texte
                 if not est_question:
-                    try:
-                        resultat = await outil.executer(texte, user_id=user_id)
-                        if resultat:
-                            log.info(f"Router a execute: {intention}")
-                            return str(resultat)
-                    except TypeError as e:
-                        log.warning(f"Erreur outil {intention} (tentative sans user_id): {e}")
+                    for kwargs in [{"user_id": user_id, "chat_id": chat_id}, {"user_id": user_id}, {}]:
                         try:
-                            resultat = await outil.executer(texte)
+                            resultat = await outil.executer(texte, **{k: v for k, v in kwargs.items() if v is not None})
                             if resultat:
                                 log.info(f"Router a execute: {intention}")
                                 return str(resultat)
-                        except Exception as e2:
-                            log.warning(f"Erreur outil {intention} (sans user_id aussi): {e2}")
-                    except Exception as e:
-                        log.warning(f"Erreur outil {intention}: {e}")
+                        except TypeError:
+                            continue
+                        except Exception as e:
+                            log.warning(f"Erreur outil {intention}: {e}")
+                            break
         return None
 
-    async def traiter_message(self, texte, user_id="default", msg_date=None):
+    async def traiter_message(self, texte, user_id="default", msg_date=None, chat_id=None):
         import re
         import asyncio
         from core.router import detecter_intention, executer_intention
@@ -129,7 +124,7 @@ class Agent:
                 outil = self.outils.get(func_name)
                 if outil and hasattr(outil, 'executer_args'):
                     try:
-                        resultat = await outil.executer_args(**args, user_id=user_id)
+                        resultat = await outil.executer_args(**args, user_id=user_id, chat_id=chat_id)
                     except Exception as e:
                         resultat = f"Erreur outil {func_name}: {e}"
                 elif outil and hasattr(outil, 'executer'):
@@ -156,13 +151,13 @@ class Agent:
         if iterations > 0:
             reponse, llm_utilise = self.llm.reformuler_avec_outil(user_id)
             # Phase 1.5: si le LLM a appele le mauvais outil, le router peut corriger
-            router_result = await self._router_result(texte, user_id)
+            router_result = await self._router_result(texte, user_id, chat_id=chat_id)
             if router_result:
                 reponse = router_result
             self.memory.ajouter_message("assistant", reponse, user_id)
             return reponse, llm_utilise
         # Phase 2: Fallback keyword router (si fonction calling non declenche)
-        router_result = await self._router_result(texte, user_id)
+        router_result = await self._router_result(texte, user_id, chat_id=chat_id)
         if router_result:
             reponse = router_result
         self.memory.ajouter_message("assistant", reponse, user_id)

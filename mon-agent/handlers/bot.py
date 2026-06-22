@@ -155,7 +155,7 @@ async def repondre_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log.info(f"Identite definie via Telegram: {nom}")
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
     try:
-        reponse, source = await get_agent().traiter_message(texte, user_id, msg_date=update.message.date)
+        reponse, source = await get_agent().traiter_message(texte, user_id, msg_date=update.message.date, chat_id=str(update.effective_chat.id))
         if isinstance(reponse, str):
             await update.message.reply_text(reponse)
         elif isinstance(reponse, dict) and reponse.get("type") == "confirmation":
@@ -228,14 +228,18 @@ def envoyer_rappels():
         import httpx
         for r in echus:
             try:
+                chat_id_send = r.get("chat_id") or r["user_id"]
                 resp = httpx.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={"chat_id": r["user_id"], "text": f"Rappel : {r['message']}"},
+                    json={"chat_id": chat_id_send, "text": f"Rappel : {r['message']}"},
                     timeout=10
                 )
                 if resp.status_code == 200:
                     a.memory.marquer_envoye(r["user_id"], r["doc_id"])
-                    log.info(f"Rappel envoye a {r['user_id']}: {r['message'][:40]}")
+                    log.info(f"Rappel envoye a {chat_id_send}: {r['message'][:40]}")
+                elif resp.status_code == 400:
+                    log.warning(f"Rappel {r['doc_id'][:8]} : chat_id {chat_id_send} invalide, marquage envoye")
+                    a.memory.marquer_envoye(r["user_id"], r["doc_id"])
             except Exception as e:
                 log.warning(f"Envoi rappel: {e}")
     except Exception as e:

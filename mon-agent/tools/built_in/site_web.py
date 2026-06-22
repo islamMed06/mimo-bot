@@ -72,7 +72,7 @@ class SiteWebOutil:
             }
         }
 
-    async def executer_args(self, action, email=None, nom=None):
+    async def executer_args(self, action, email=None, nom=None, **kwargs):
         if action == "liste_utilisateurs":
             return await self._api_call("GET", "/api/agent/users/list")
         if action == "stats":

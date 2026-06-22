@@ -96,5 +96,5 @@ class MeteoSkill:
             }
         }
 
-    async def executer_args(self, city="Alger"):
+    async def executer_args(self, city="Alger", **kwargs):
         return await self._meteo(city)

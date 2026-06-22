@@ -11,10 +11,11 @@ class RappelSkill:
         self.config = config
         self.memory = memory
 
-    async def executer(self, texte, user_id=None):
+    async def executer(self, texte, user_id=None, chat_id=None):
         if not user_id:
             return "Erreur: utilisateur non identifie."
         self._user_id = user_id
+        self._chat_id = chat_id or user_id
         t = texte.lower()
         if "liste" in t or "list" in t or "affiche" in t or "mes rappels" in t:
             return self._liste()
@@ -31,7 +32,7 @@ class RappelSkill:
         if not message:
             return "Quel est le message du rappel ? (ex: `dans 30 min de [message]`)"
         echeance = maintenant_algerie() + timedelta(minutes=duree_minutes)
-        doc_id = self.memory.ajouter_rappel(self._user_id, message, echeance.isoformat())
+        doc_id = self.memory.ajouter_rappel(self._user_id, message, echeance.isoformat(), chat_id=self._chat_id)
         if doc_id:
             return f"Rappel programmé dans {self._fmt_duree(duree_minutes)} (à {echeance.strftime('%H:%M')}) : {message}"
         return "Erreur lors de la programmation du rappel."
@@ -128,14 +129,14 @@ class RappelSkill:
             }
         }
 
-    async def executer_args(self, action, duree_minutes=None, message=None, id_suppression=None, user_id=None):
+    async def executer_args(self, action, duree_minutes=None, message=None, id_suppression=None, user_id=None, chat_id=None, **kwargs):
         if action == "lister":
-            return await self.executer("liste mes rappels", user_id=user_id)
+            return await self.executer("liste mes rappels", user_id=user_id, chat_id=chat_id)
         if action == "supprimer":
-            return await self.executer(f"supprime rappel {id_suppression}", user_id=user_id)
+            return await self.executer(f"supprime rappel {id_suppression}", user_id=user_id, chat_id=chat_id)
         if action == "programmer":
             texte = f"programme un rappel dans {duree_minutes} min"
             if message:
                 texte += f" de {message}"
-            return await self.executer(texte, user_id=user_id)
+            return await self.executer(texte, user_id=user_id, chat_id=chat_id)
         return "Action non reconnue. Utilise programmer, lister ou supprimer."
