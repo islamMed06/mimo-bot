@@ -89,6 +89,7 @@ class Agent:
     async def traiter_message(self, texte, user_id="default", msg_date=None, chat_id=None):
         import re
         import asyncio
+        import unicodedata
         from core.router import detecter_intention, executer_intention
         if not self.llm.historique:
             await self._restaurer_contexte(user_id)
@@ -117,11 +118,13 @@ class Agent:
             log.info(f"Tool calls (iter {iterations}): {[tc['function']['name'] for tc in tool_calls]}")
             for tc in tool_calls:
                 func_name = tc["function"]["name"]
+                # Normaliser: stripper les accents (ex: meteo vs meteo)
+                func_name_clean = unicodedata.normalize('NFKD', func_name).encode('ascii', 'ignore').decode('ascii')
                 try:
                     args = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
                     args = {}
-                outil = self.outils.get(func_name)
+                outil = self.outils.get(func_name) or self.outils.get(func_name_clean)
                 if outil and hasattr(outil, 'executer_args'):
                     try:
                         resultat = await outil.executer_args(**args, user_id=user_id, chat_id=chat_id)

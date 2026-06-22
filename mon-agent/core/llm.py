@@ -111,6 +111,7 @@ class LLMManager:
                 "OUTILS DISPONIBLES : utilise 'meteo' pour la météo, 'rappel' pour les rappels, 'traducteur' pour les traductions, 'recherche_web' pour chercher sur Internet, 'memoire' pour le profil utilisateur, 'conversation' pour les discussions générales.",
                 "Choisis TOUJOURS l'outil le plus adapté. Exemple : si l'utilisateur demande la météo, utilise 'meteo' (pas 'memoire').",
                 "Tu confirmes toujours avant les actions sensibles (création, modification, envoi).",
+                "Les noms d'outils sont en ASCII uniquement (pas d'accents). Exemple: 'meteo' pas 'météo'.",
                 "Tu n'effectues jamais seul des actions de suppression en masse ou de partage de données privées.",
             ],
             "en": [
@@ -121,6 +122,7 @@ class LLMManager:
                 "AVAILABLE TOOLS: use 'meteo' for weather, 'rappel' for reminders, 'traducteur' for translations, 'recherche_web' for Internet search, 'memoire' for user profile, 'conversation' for general chat.",
                 "ALWAYS choose the most appropriate tool. Example: if the user asks about weather, use 'meteo' (not 'memoire').",
                 "You always confirm before sensitive actions (create, modify, send).",
+                "Tool names are ASCII-only (no accents). Example: 'meteo' not 'météo'.",
                 "You never perform mass deletions or private data sharing on your own.",
             ],
         }
