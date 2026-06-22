@@ -20,10 +20,11 @@ _agent_lock = threading.Lock()
 START_TIME = time.time()
 POLL_COUNT = 0
 _TOKEN = os.getenv("TELEGRAM_TOKEN")
-_STOP = False
+_RESTART = False
 
-# PTB v22+ gere SIGTERM en interne via run_polling()
-# _STOP est mis a True dans lancer_bot() apres un arret propre
+# Mode resilience Render : apres SIGTERM (run_polling retourne), la boucle
+# relance le polling automatiquement au lieu d'exiter le process.
+# Le thread HTTP non-daemon empeche Python de fermer le process.
 
 def get_agent():
     global agent, _agent_lock
@@ -323,7 +324,7 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
 def lancer_bot():
-    global agent, POLL_COUNT
+    global agent, POLL_COUNT, _RESTART
     agent = None
     POLL_COUNT += 1
     token = os.getenv("TELEGRAM_TOKEN")
@@ -331,7 +332,6 @@ def lancer_bot():
         log.error("TELEGRAM_TOKEN manquant")
         return
     import httpx
-    # Clean up any stale polling sessions before starting
     for t in range(3):
         try:
             r = httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
@@ -357,10 +357,9 @@ def lancer_bot():
     for t in range(4):
         try:
             app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
-            global _STOP
-            _STOP = True
-            log.info("Run polling termine proprement (SIGTERM)")
-            break
+            _RESTART = True
+            log.info("Run polling termine proprement (SIGTERM), redemarrage...")
+            return
         except Exception as e:
             err_str = f"{type(e).__name__}: {e}"
             log.error(f"Polling arrete: {err_str}")
@@ -370,7 +369,7 @@ def lancer_bot():
                 httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
                 time.sleep(duree)
             else:
-                break
+                return
 
 def demarrer_http(port):
     from http.server import HTTPServer
@@ -379,18 +378,15 @@ def demarrer_http(port):
 
 def main():
     port = int(os.environ.get("PORT", 10000))
-    t_http = threading.Thread(target=demarrer_http, args=(port,), daemon=True)
+    t_http = threading.Thread(target=demarrer_http, args=(port,), daemon=False)
     t_http.start()
     t_keep = threading.Thread(target=keepalive, daemon=True)
     t_keep.start()
-    global _STOP
-    while not _STOP:
+    while True:
         try:
             lancer_bot()
         except Exception as e:
             log.error(f"Bot error: {e}")
-        if _STOP:
-            break
         log.info("Bot redemarrage dans 5s...")
         time.sleep(5)
 
