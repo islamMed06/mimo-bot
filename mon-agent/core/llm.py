@@ -100,9 +100,12 @@ class LLMManager:
         langue = "fr"
         if user_message:
             langue = detecter_langue(user_message)
+        noms_affichage = self.config.get("llm", {}).get("noms_affichage", {})
+        modele_actif = noms_affichage.get(self.llm_actif, self.llm_actif)
         lignes = {
             "fr": [
                 f"Tu es {self.config['agent']['nom']}, un assistant AI personnel modulaire et autonome.",
+                f"Modèle actif : {modele_actif}.",
                 "Tu réponds toujours dans la langue de l'utilisateur. Sois concis, clair et utile.",
                 "Tu utilises Groq, Gemini, OpenRouter, HuggingFace, Cloudflare ou GitHub Models comme LLM (fallback automatique).",
                 "OUTILS DISPONIBLES : utilise 'meteo' pour la météo, 'rappel' pour les rappels, 'traducteur' pour les traductions, 'recherche_web' pour chercher sur Internet, 'memoire' pour le profil utilisateur, 'conversation' pour les discussions générales.",
@@ -112,6 +115,7 @@ class LLMManager:
             ],
             "en": [
                 f"You are {self.config['agent']['nom']}, a modular and autonomous personal AI assistant.",
+                f"Active model: {modele_actif}.",
                 "Always reply in the user's language. Be concise, clear, and useful.",
                 "You use Groq, Gemini, OpenRouter, HuggingFace, Cloudflare or GitHub Models as LLM (auto fallback).",
                 "AVAILABLE TOOLS: use 'meteo' for weather, 'rappel' for reminders, 'traducteur' for translations, 'recherche_web' for Internet search, 'memoire' for user profile, 'conversation' for general chat.",
