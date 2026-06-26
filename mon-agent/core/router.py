@@ -9,6 +9,7 @@ MOTS_CLEFS = {
     "meteo": ["meteo", "météo", "weather", "wttr", "temperature", "température", "degré"],
     "traduction": ["traduis", "traduit", "traduction", "translate"],
     "rappel": ["programme un rappel", "ajoute un rappel", "rappelle-moi", "rappelle moi", "crée un rappel", "liste mes rappels", "supprime rappel", "affiche mes rappels"],
+    "memoire": ["qui suis je", "qui suis-je", "profil", "memoire", "mémoire", "que sais tu de moi", "que sais-tu de moi", "mes preferences", "mes préférences", "mon profil"],
     "conversation": []
 }
 
@@ -40,6 +41,7 @@ def executer_intention(intention, texte, outils):
         "meteo": "meteo",
         "traduction": "traducteur",
         "rappel": "rappel",
+        "memoire": "memoire",
         "conversation": "conversation",
     }
     nom_outil = mapping.get(intention)

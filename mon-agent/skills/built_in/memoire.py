@@ -7,7 +7,19 @@ class MemoireSkill:
         self.memory = memory
 
     async def executer(self, texte, user_id=None):
-        return "Voici ce que je sais de toi:\n" + self.memory.get_contexte(user_id)
+        profil = self.memory.charger_profil(user_id)
+        identite = profil.get("identite", "Inconnue")
+        prefs = profil.get("preferences", {})
+        routines = profil.get("routine", {})
+        habitudes = profil.get("habitudes", [])
+        lignes = [f"Identité : {identite}"]
+        if prefs:
+            lignes.append(f"Préférences : {', '.join(f'{k}={v}' for k, v in prefs.items())}")
+        if routines:
+            lignes.append(f"Routine : {', '.join(f'{k}={v}' for k, v in routines.items())}")
+        if habitudes:
+            lignes.append(f"Habitudes : {', '.join(habitudes[-5:])}")
+        return "Voici ce que je sais de toi:\n" + "\n".join(lignes)
 
     @staticmethod
     def get_function_schema():
