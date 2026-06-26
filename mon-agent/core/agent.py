@@ -114,15 +114,17 @@ class Agent:
                 self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {self._format_profil(profil)}"})
                 log.info(f"Profil utilisateur injecte dans historique existant")
         self.memory.ajouter_message("user", texte, user_id)
-        # Detection auto si l'utilisateur se presente
+        # Detection auto si l'utilisateur se presente (n'ecrase que si le nom est vraiment different)
         m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(.+)", texte.lower())
         if m_name:
             nom = m_name.group(1).strip().rstrip(".,!?;").title()
             if nom and len(nom) >= 2:
                 profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
-                profil["identite"] = f"L'utilisateur s'appelle {nom}."
-                await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
-                log.info(f"Identite definie via phrase: {nom}")
+                existing = profil.get("identite", "").lower()
+                if nom.lower() not in existing:
+                    profil["identite"] = f"L'utilisateur s'appelle {nom}."
+                    await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
+                    log.info(f"Identite definie via phrase: {nom}")
         # Phase 1: Function calling (max 2 iterations)
         schemas = self._build_tool_schemas()
         reponse, llm_utilise, tool_calls = self.llm.repondre(texte, user_id, msg_date=msg_date, tools=schemas)
@@ -204,13 +206,14 @@ class Agent:
                 m_name = re.search(r"(?:je suis|je m'appelle|mon nom est|appelle.moi|moi c'est)\s+(.+)", m["content"].lower())
                 if m_name:
                     nom = m_name.group(1).strip().rstrip(".,!?;").title()
-                    profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
-                    profil["identite"] = f"L'utilisateur s'appelle {nom}."
-                    await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
-                    self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] L'utilisateur s'appelle {nom}."})
-                    log.info(f"Identite restauree depuis historique: {nom}")
-                    trouve = True
-                    break
+                    if nom and len(nom) >= 2:
+                        profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
+                        profil["identite"] = f"L'utilisateur s'appelle {nom}."
+                        await asyncio.to_thread(self.memory.sauvegarder_profil, profil, user_id)
+                        self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {self._format_profil(profil)}"})
+                        log.info(f"Identite restauree depuis historique: {nom}")
+                        trouve = True
+                        break
             if not trouve:
                 resume_ctx = super_data[0] if super_data else None
                 extraites = await asyncio.to_thread(self.llm._extraire_identite, user_id, messages, resume_ctx)
