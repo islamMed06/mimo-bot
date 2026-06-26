@@ -7,7 +7,7 @@ class MemoireSkill:
         self.memory = memory
 
     async def executer(self, texte, user_id=None):
-        return "Voici ce que je sais de toi:\n" + self.memory.get_contexte()
+        return "Voici ce que je sais de toi:\n" + self.memory.get_contexte(user_id)
 
     @staticmethod
     def get_function_schema():
@@ -24,4 +24,4 @@ class MemoireSkill:
         }
 
     async def executer_args(self, **kwargs):
-        return await self.executer("")
+        return await self.executer("", user_id=kwargs.get("user_id"))
