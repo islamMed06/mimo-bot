@@ -304,7 +304,9 @@ class MemoryManager:
         try:
             doc = self.db.collection("user_profile").document(user_id).get()
             if doc.exists:
-                return doc.to_dict()
+                profil = self._profil_par_defaut()
+                profil.update(doc.to_dict())
+                return profil
         except Exception as e:
             log.warning(f"Erreur chargement profil: {e}")
         return self._profil_par_defaut()
