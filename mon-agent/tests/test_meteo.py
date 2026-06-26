@@ -27,3 +27,6 @@ class TestExtraireVille:
     def test_stop_words_ignored(self, skill):
         ville = skill._extraire_ville("donne la temperature")
         assert ville == "Alger"
+
+    def test_the_weather_returns_default(self, skill):
+        assert skill._extraire_ville("the weather") == "Alger"

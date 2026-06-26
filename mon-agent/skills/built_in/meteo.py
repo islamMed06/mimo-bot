@@ -17,7 +17,8 @@ class MeteoSkill:
         "quelle", "est", "la", "le", "les", "de", "du", "des", "pour", "sur", "ce", "cette",
         "donne", "donne-moi", "s'il", "te", "plait", "s'il te plaît", "stp", "svp", "quel",
         "meteo", "météo", "weather", "temperature", "température", "degré",
-        "d'aujourd'hui", "demain", "exacte", "actuelle", "maintenant"
+        "d'aujourd'hui", "demain", "exacte", "actuelle", "maintenant",
+        "the", "a", "an", "at", "in", "this", "for"
     }
 
     def _extraire_ville(self, texte):
@@ -88,10 +89,9 @@ class MeteoSkill:
                     "properties": {
                         "city": {
                             "type": "string",
-                            "description": "Nom de la ville (ex: Alger, Paris, London)"
+                            "description": "Nom de la ville (ex: Alger, Paris, London). Optionnel si l'utilisateur n'a pas precise de ville."
                         }
-                    },
-                    "required": ["city"]
+                    }
                 }
             }
         }
