@@ -186,13 +186,13 @@ def keepalive():
     import httpx
     port = int(os.environ.get("PORT", 10000))
     counter = 0
-    log.info("Keepalive demarre (verifie rappels toutes les 15s)")
+    log.info("Keepalive demarre (verifie rappels toutes les 60s)")
     while True:
         try:
-            time.sleep(15)
+            time.sleep(60)
             counter += 1
             envoyer_rappels()
-            if counter % 8 == 0:
+            if counter % 2 == 0:
                 _log_memory()
                 try:
                     resp = httpx.get(f"https://api.telegram.org/bot{os.getenv('TELEGRAM_TOKEN')}/getMe", timeout=10)

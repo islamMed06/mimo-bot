@@ -376,8 +376,10 @@ class MemoryManager:
     def rappels_echus(self):
         if not self.db:
             return []
+        maintenant = datetime.now(ALGERIA_TZ)
+        if hasattr(self, '_cooldown_429_rappels') and (maintenant - self._cooldown_429_rappels).total_seconds() < 60:
+            return []
         try:
-            maintenant = datetime.now(ALGERIA_TZ)
             maintenant_iso = maintenant.isoformat()
             echus = []
             docs = self.db.collection("reminders").stream()
@@ -390,7 +392,12 @@ class MemoryManager:
             log.info(f"rappels_echus: {len(echus)} echus")
             return echus
         except Exception as e:
-            log.warning(f"Erreur verification rappels: {e}")
+            err = str(e)
+            if "429" in err or "quota" in err.lower():
+                self._cooldown_429_rappels = maintenant
+                log.info(f"Quota rappels depasse, cooldown 60s")
+            else:
+                log.warning(f"Erreur verification rappels: {e}")
             return []
 
     def marquer_envoye(self, user_id, doc_id):
