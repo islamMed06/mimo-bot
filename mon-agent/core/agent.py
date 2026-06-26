@@ -64,6 +64,20 @@ class Agent:
                     log.warning(f"Schema {nom} ignoré: {e}")
         return schemas if schemas else None
 
+    @staticmethod
+    def _format_profil(profil):
+        lignes = [profil.get("identite", "")]
+        prefs = profil.get("preferences", {})
+        if prefs:
+            lignes.append(f"Ses préférences: {', '.join(f'{k}={v}' for k, v in prefs.items())}")
+        routine = profil.get("routine", {})
+        if routine:
+            lignes.append(f"Sa routine: {', '.join(f'{k}={v}' for k, v in routine.items())}")
+        habitudes = profil.get("habitudes", [])
+        if habitudes:
+            lignes.append(f"Ses habitudes: {', '.join(habitudes[-5:])}")
+        return "\n".join(lignes)
+
     async def _router_result(self, texte, user_id, chat_id=None):
         from core.router import detecter_intention, executer_intention
         import re
@@ -97,7 +111,7 @@ class Agent:
             profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
             identite = profil.get("identite")
             if identite and self.llm.identite_est_valide(identite) and not any(m["role"] == "system" and "[Profil utilisateur]" in m["content"] for m in self.llm.historique):
-                self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {identite}"})
+                self.llm.historique.insert(0, {"role": "system", "content": f"[Profil utilisateur] {self._format_profil(profil)}"})
                 log.info(f"Profil utilisateur injecte dans historique existant")
         self.memory.ajouter_message("user", texte, user_id)
         # Detection auto si l'utilisateur se presente
@@ -172,7 +186,7 @@ class Agent:
         profil = await asyncio.to_thread(self.memory.charger_profil, user_id)
         identite = profil.get("identite")
         if identite and self.llm.identite_est_valide(identite):
-            self.llm.historique.append({"role": "system", "content": f"[Profil utilisateur] {identite}"})
+            self.llm.historique.append({"role": "system", "content": f"[Profil utilisateur] {self._format_profil(profil)}"})
         super_data = await asyncio.to_thread(self.memory.charger_super_resume, user_id)
         if super_data:
             super_texte, super_date = super_data
