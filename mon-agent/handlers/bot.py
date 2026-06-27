@@ -383,6 +383,12 @@ def main():
     t_keep = threading.Thread(target=keepalive, daemon=True)
     t_keep.start()
     while True:
+        # Creer un event loop propre (run_polling ferme le precedent apres SIGTERM)
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        except RuntimeError:
+            pass
         try:
             lancer_bot()
         except Exception as e:
