@@ -382,19 +382,12 @@ def main():
     t_http.start()
     t_keep = threading.Thread(target=keepalive, daemon=True)
     t_keep.start()
-    while True:
-        # Creer un event loop propre (run_polling ferme le precedent apres SIGTERM)
-        try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        except RuntimeError:
-            pass
-        try:
-            lancer_bot()
-        except Exception as e:
-            log.error(f"Bot error: {e}")
-        log.info("Bot redemarrage dans 5s...")
-        time.sleep(5)
+    try:
+        lancer_bot()
+    except Exception as e:
+        log.error(f"Bot error: {e}")
+    log.info("Bot arrete proprement (SIGTERM/SIGINT), sortie du process pour redemarrage Render...")
+    os._exit(0)
 
 if __name__ == "__main__":
     main()
