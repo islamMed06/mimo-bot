@@ -386,8 +386,8 @@ def main():
         lancer_bot()
     except Exception as e:
         log.error(f"Bot error: {e}")
-    log.info("Bot arrete proprement (SIGTERM/SIGINT), sortie du process pour redemarrage Render...")
-    os._exit(0)
+    log.info("Bot arrete proprement (SIGTERM/SIGINT), sortie pour redemarrage Render...")
+    os._exit(1)
 
 if __name__ == "__main__":
     main()
