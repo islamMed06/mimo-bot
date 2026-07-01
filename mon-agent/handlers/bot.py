@@ -19,8 +19,6 @@ agent = None
 _agent_lock = threading.Lock()
 START_TIME = time.time()
 POLL_COUNT = 0
-_TOKEN = os.getenv("TELEGRAM_TOKEN")
-_RESTART = False
 
 # Mode resilience Render : apres SIGTERM (run_polling retourne), la boucle
 # relance le polling automatiquement au lieu d'exiter le process.
@@ -324,52 +322,54 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
 def lancer_bot():
-    global agent, POLL_COUNT, _RESTART
-    agent = None
-    POLL_COUNT += 1
+    global POLL_COUNT
     token = os.getenv("TELEGRAM_TOKEN")
     if not token:
         log.error("TELEGRAM_TOKEN manquant")
         return
     import httpx
-    for t in range(3):
-        try:
-            r = httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
-            if r.status_code in (200, 429):
-                if r.status_code == 200:
-                    log.info(f"Session fermee (tentative {t+1})")
+    while True:
+        POLL_COUNT += 1
+        for t in range(3):
+            try:
+                r = httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
+                if r.status_code in (200, 429):
+                    if r.status_code == 200:
+                        log.info(f"Session fermee (tentative {t+1})")
+                    break
+                time.sleep(2)
+            except httpx.RequestError:
+                time.sleep(2)
+        httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
+        time.sleep(2)
+        app = Application.builder().token(token).build()
+        handlers = [CommandHandler("start", start), CommandHandler("help", help_command),
+                    CommandHandler("outils", outils), CommandHandler("status", status),
+                    CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
+                    CommandHandler("uptime", uptime),
+                    CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("setname", setname),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
+        for h in handlers:
+            app.add_handler(h)
+        log.info("MimoBot demarre...")
+        for t in range(4):
+            try:
+                app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
+                log.info("Run polling termine (SIGTERM), redemarrage polling dans 5s...")
+                time.sleep(5)
                 break
-            time.sleep(2)
-        except httpx.RequestError:
-            time.sleep(2)
-    httpx.post(f"https://api.telegram.org/bot{token}/deleteWebhook", timeout=5)
-    time.sleep(2)
-    app = Application.builder().token(token).build()
-    handlers = [CommandHandler("start", start), CommandHandler("help", help_command),
-                CommandHandler("outils", outils), CommandHandler("status", status),
-                CommandHandler("diagnostic", diagnostic), CommandHandler("test_llm", test_llm),
-                CommandHandler("uptime", uptime),
-                CommandHandler("memoire", memoire), CommandHandler("time", cmd_time), CommandHandler("setname", setname),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, repondre_message)]
-    for h in handlers:
-        app.add_handler(h)
-    log.info("MimoBot demarre...")
-    for t in range(4):
-        try:
-            app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
-            _RESTART = True
-            log.info("Run polling termine proprement (SIGTERM), redemarrage...")
-            return
-        except Exception as e:
-            err_str = f"{type(e).__name__}: {e}"
-            log.error(f"Polling arrete: {err_str}")
-            if "Conflict" in str(e) and t < 3:
-                duree = 5 * (t + 1)
-                log.info(f"Conflit detecte, retente dans {duree}s (tentative {t+1}/3)...")
-                httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
-                time.sleep(duree)
-            else:
-                return
+            except Exception as e:
+                err_str = f"{type(e).__name__}: {e}"
+                log.error(f"Polling arrete: {err_str}")
+                if "Conflict" in str(e) and t < 3:
+                    duree = 5 * (t + 1)
+                    log.info(f"Conflit detecte, retente dans {duree}s (tentative {t+1}/3)...")
+                    httpx.post(f"https://api.telegram.org/bot{token}/close", timeout=5)
+                    time.sleep(duree)
+                else:
+                    log.info("Echec polling, redemarrage complet dans 5s...")
+                    time.sleep(5)
+                    break
 
 def demarrer_http(port):
     from http.server import HTTPServer
@@ -386,8 +386,9 @@ def main():
         lancer_bot()
     except Exception as e:
         log.error(f"Bot error: {e}")
-    log.info("Bot arrete proprement (SIGTERM/SIGINT), sortie pour redemarrage Render...")
-    os._exit(1)
+    log.warning("main() arret inattendu - thread HTTP non-daemon maintient le process")
+    while True:
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
