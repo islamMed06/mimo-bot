@@ -321,6 +321,20 @@ class AgentHTTPHandler(BaseHTTPRequestHandler):
 
     def log_message(self, *a): pass
 
+def _run_polling_loop(app, **kwargs):
+    """Execute app.run_polling dans un event loop frais.
+    run_polling ferme son loop interne → on force un nouveau loop a chaque appel.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        # on recompile le loop dans run_polling
+        app.run_polling(**kwargs)
+    finally:
+        if not loop.is_closed():
+            loop.close()
+        asyncio.set_event_loop(None)
+
 def lancer_bot():
     global POLL_COUNT
     token = os.getenv("TELEGRAM_TOKEN")
@@ -354,8 +368,8 @@ def lancer_bot():
         log.info("MimoBot demarre...")
         for t in range(4):
             try:
-                app.run_polling(drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
-                log.info("Run polling termine (SIGTERM), redemarrage polling dans 5s...")
+                _run_polling_loop(app, drop_pending_updates=True, allowed_updates=["message"], bootstrap_retries=3)
+                log.info("Run polling termine (SIGTERM), redemarrage dans 5s...")
                 time.sleep(5)
                 break
             except Exception as e:
